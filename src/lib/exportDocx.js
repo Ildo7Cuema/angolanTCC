@@ -110,45 +110,76 @@ async function getMermaidImage(mermaidCode) {
   }
 }
 
-function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING) {
+function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, universityCity = 'Luanda') {
   const elements = []
+  const projectType = project?.sections?.projectType || 'tcc'
+  const docType = projectType === 'anteprojecto'
+    ? 'ANTE-PROJECTO DE PESQUISA'
+    : 'TRABALHO DE FIM DE CURSO — LICENCIATURA'
+  const cityYear = `${universityCity}, ${project.year || new Date().getFullYear()}`
   
   // CAPA
+  // Header institucional
+  elements.push(new Paragraph({
+    children: [new TextRun({ text: 'REPÚBLICA DE ANGOLA', bold: true, size: 22, font: FONT })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 80 }
+  }))
+  elements.push(new Paragraph({
+    children: [new TextRun({ text: 'MINISTÉRIO DO ENSINO SUPERIOR, CIÊNCIA, TECNOLOGIA E INOVAÇÃO', bold: true, size: 20, font: FONT })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 400 }
+  }))
+
   if (logoBuffer) {
     elements.push(new Paragraph({
       children: [
         new ImageRun({
           data: logoBuffer,
-          transformation: { width: 150, height: 150 }
+          transformation: { width: 130, height: 130 }
         })
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 600 }
+      spacing: { before: 200, after: 400 }
     }))
   }
   
   elements.push(new Paragraph({
-    children: [new TextRun({ text: project.university?.toUpperCase() || '', bold: true, size: 28 })],
+    children: [new TextRun({ text: project.university?.toUpperCase() || '', bold: true, size: 26, font: FONT })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 120 }
+  }))
+
+  if (project.course) {
+    elements.push(new Paragraph({
+      children: [new TextRun({ text: `Faculdade de ${project.course}`, size: 22, font: FONT })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 1200 }
+    }))
+  }
+
+  elements.push(new Paragraph({
+    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 1800 }
+  }))
+
+  elements.push(new Paragraph({
+    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT })],
     alignment: AlignmentType.CENTER,
     spacing: { after: 1200 }
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 28 })],
+    children: [new TextRun({ text: docType, bold: true, size: 22, font: FONT, italics: true })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 3000 }
+    spacing: { after: 2000 }
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 32 })],
+    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 3500 }
-  }))
-
-  elements.push(new Paragraph({
-    children: [new TextRun({ text: `Luanda, ${project.year || new Date().getFullYear()}`, bold: true, size: 24 })],
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 2000 }
+    spacing: { before: 400 }
   }))
 
   // FOLHA DE ROSTO
@@ -158,57 +189,53 @@ function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING) {
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 28 })],
+    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 2000 }
+    spacing: { after: 1800 }
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 32 })],
+    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 2000 }
+    spacing: { after: 1800 }
   }))
 
-  // Alignment right for orientation block
-  elements.push(new Paragraph({
-    children: [
-      new TextRun({
-        text: `Documento apresentado ao curso de ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a obtenção do grau de Licenciado.`,
-        size: 24
-      })
-    ],
-    alignment: AlignmentType.RIGHT,
-    indent: { left: convertMillimetersToTwip(80) }, // Metade da página
-    spacing: { line: LINE_SPACING, after: 1000 }
-  }))
+  // Orientation block (right-aligned, left half indented)
+  const orientationText = projectType === 'anteprojecto'
+    ? `Ante-Projecto de Pesquisa apresentado ao Departamento de ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a aprovação na disciplina de Metodologia de Investigação Científica.`
+    : `Trabalho de Conclusão de Curso apresentado ao Departamento de ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a obtenção do grau de Licenciado.`
 
   elements.push(new Paragraph({
-    children: [
-      new TextRun({
-        text: `Orientador(a): ${project.advisor || 'Não especificado'}`,
-        size: 24
-      })
-    ],
-    alignment: AlignmentType.RIGHT,
-    indent: { left: convertMillimetersToTwip(80) },
-    spacing: { after: 3000 }
+    children: [new TextRun({ text: orientationText, size: 22, font: FONT })],
+    alignment: AlignmentType.LEFT,
+    indent: { left: convertMillimetersToTwip(85) },
+    spacing: { line: LINE_SPACING, after: 800 }
   }))
 
+  if (project.advisor) {
+    elements.push(new Paragraph({
+      children: [new TextRun({ text: `Orientador(a): ${project.advisor}`, size: 22, font: FONT })],
+      alignment: AlignmentType.LEFT,
+      indent: { left: convertMillimetersToTwip(85) },
+      spacing: { after: 3000 }
+    }))
+  }
+
   elements.push(new Paragraph({
-    children: [new TextRun({ text: `Luanda, ${project.year || new Date().getFullYear()}`, bold: true, size: 24 })],
+    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT })],
     alignment: AlignmentType.CENTER,
-    spacing: { before: 2000 }
+    spacing: { before: 1600 }
   }))
 
   return elements
 }
 
-async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING) {
+async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, universityCity = 'Luanda') {
   const elements = []
 
   // Override da Capa
   if (sectionId === 'capa') {
-    return generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING)
+    return generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, universityCity)
   }
 
   const activeSections = getSectionsForProject(project?.sections?.projectType)
@@ -366,27 +393,39 @@ export async function exportToDocx(project, sections) {
   const LINE_SPACING = academicNorm === 'APA' ? 480 : 360
 
   let logoBuffer = null
+  let universityCity = 'Luanda' // default
+
   if (project?.university) {
     try {
       const { data: uniData } = await supabase
         .from('universities')
-        .select('logo_url')
+        .select('logo_url, city, province')
         .eq('name', project.university)
         .limit(1)
         .single()
         
+      // Use city from DB if available
+      if (uniData?.city) {
+        universityCity = uniData.city
+      } else if (uniData?.province) {
+        universityCity = uniData.province
+      }
+
       if (uniData?.logo_url) {
-        try {
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uniData.logo_url)}`
-          const response = await fetch(proxyUrl)
-          if (response.ok) {
-            logoBuffer = await response.arrayBuffer()
-          } else {
-            const directRes = await fetch(uniData.logo_url)
-            if (directRes.ok) logoBuffer = await directRes.arrayBuffer()
+        const logoUrls = [
+          `https://corsproxy.io/?${encodeURIComponent(uniData.logo_url)}`,
+          uniData.logo_url,
+        ]
+        for (const url of logoUrls) {
+          try {
+            const response = await fetch(url)
+            if (response.ok) {
+              logoBuffer = await response.arrayBuffer()
+              break
+            }
+          } catch (e) {
+            console.warn('Erro fetch logo:', url, e)
           }
-        } catch (e) {
-          console.warn('Erro fetch logo oficial', e)
         }
       }
 
@@ -405,7 +444,7 @@ export async function exportToDocx(project, sections) {
     const content = sections?.[sectionId]
     if (!content && sectionId !== 'capa') continue // Capa é gerada independente
 
-    const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING)
+    const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, universityCity)
     allElements.push(...elements)
   }
 

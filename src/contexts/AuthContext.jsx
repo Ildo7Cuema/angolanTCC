@@ -28,12 +28,17 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signUp = async (email, password, fullName) => {
+  const signUp = async (email, password, fullName, familyMeta = {}) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          father_name: familyMeta.fatherName || '',
+          mother_name: familyMeta.motherName || '',
+          other_relatives: familyMeta.otherRelatives || '',
+        },
       },
     })
     return { data, error }

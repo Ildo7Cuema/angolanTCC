@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Wand2,
   CheckCircle2,
+  ClipboardList,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -24,21 +25,80 @@ const fadeUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 }
 
-const angolianUniversities = [
-  'Universidade Agostinho Neto (UAN)',
-  'Universidade Lusíada de Angola (ULA)',
-  'Universidade Metodista de Angola (UMA)',
-  'Universidade Católica de Angola (UCAN)',
-  'Instituto Superior Politécnico Gregório Semedo (IGS)',
-  'Universidade Jean Piaget de Angola',
-  'Universidade Privada de Angola (UPRA)',
-  'Universidade Óscar Ribas (UÓR)',
-  'Universidade de Belas (UNIBELAS)',
-  'Universidade Técnica de Angola (UTANGA)',
-  'Instituto Superior Politécnico de Tecnologias e Ciências (ISPTEC)',
-  'Instituto Superior de Ciências Sociais e Relações Internacionais (CISSRI)',
-  'Outra',
-]
+// Universidades organizadas por Província
+const angolianUniversitiesByProvince = {
+  'Luanda': [
+    'Universidade Agostinho Neto (UAN)',
+    'Universidade Lusíada de Angola (ULA)',
+    'Universidade Metodista de Angola (UMA)',
+    'Universidade Católica de Angola (UCAN)',
+    'Universidade Jean Piaget de Angola',
+    'Universidade Privada de Angola (UPRA)',
+    'Universidade Óscar Ribas (UÓR)',
+    'Universidade de Belas (UNIBELAS)',
+    'Universidade Técnica de Angola (UTANGA)',
+    'Universidade Independente de Angola (UNIA)',
+    'Instituto Superior Politécnico Gregório Semedo (IGS)',
+    'Instituto Superior Politécnico de Tecnologias e Ciências (ISPTEC)',
+    'Instituto Superior de Ciências Sociais e Relações Internacionais (CISSRI)',
+    'Instituto Superior de Gestão e Administração de Luanda (ISGAL)',
+    'Instituto Superior de Ciências de Educação de Luanda (ISCED-Luanda)',
+    'Instituto Superior de Serviço Social (ISSS)',
+    'Escola Superior Pedagógica do Bengo',
+  ],
+  'Huíla': [
+    'Universidade Mandume ya Ndemofayo (UMN)',
+    'Instituto Superior Politécnico da Huíla (ISPH)',
+    'Instituto Superior de Ciências de Educação da Huíla (ISCED-Huíla)',
+    'Instituto Superior de Tecnologia de Lubango (ISTL)',
+    'Instituto Superior Politécnico Independente da Huíla (ISPIH)',
+  ],
+  'Huambo': [
+    'Universidade José Eduardo dos Santos (UJES) – Huambo',
+    'Instituto Superior de Ciências de Educação do Huambo (ISCED-Huambo)',
+    'Instituto Superior Politécnico do Huambo (ISPH-Huambo)',
+    'Instituto Superior Técnico de Engenharia do Huambo (ISTEH)',
+  ],
+  'Benguela': [
+    'Universidade Katyavala Bwila (UKB)',
+    'Instituto Superior de Ciências de Educação de Benguela (ISCED-Benguela)',
+    'Instituto Superior Politécnico de Benguela (ISPB)',
+    'Instituto Superior de Ciências da Saúde de Benguela (ISCISAB)',
+  ],
+  'Uíge': [
+    'Universidade Kimpa Vita (UKV)',
+    'Instituto Superior de Ciências de Educação do Uíge (ISCED-Uíge)',
+    'Instituto Superior Politécnico do Uíge (ISPU)',
+  ],
+  'Namibe': [
+    'Instituto Superior Politécnico do Namibe (ISPN)',
+    'Instituto Superior de Ciências de Educação do Namibe (ISCED-Namibe)',
+    'Instituto Superior de Tecnologia do Namibe (ISTN)',
+  ],
+  'Cabinda': [
+    'Instituto Superior Politécnico de Cabinda (ISPDC)',
+    'Instituto Superior de Ciências de Educação de Cabinda (ISCED-Cabinda)',
+  ],
+  'Cunene': [
+    'Universidade Ondjiva (UO)',
+    'Instituto Superior Politécnico do Cunene (ISPC)',
+  ],
+  'Lunda Norte / Lunda Sul': [
+    'Instituto Superior Politécnico do Dundo (ISPD)',
+    'Instituto Superior de Ciências de Educação da Lunda Norte (ISCED-Lunda Norte)',
+  ],
+  'Malanje': [
+    'Instituto Superior Politécnico de Malanje (ISPM)',
+    'Instituto Superior de Ciências de Educação de Malanje (ISCED-Malanje)',
+  ],
+  'Moxico': [
+    'Instituto Superior Politécnico do Moxico (ISPMO)',
+    'Instituto Superior de Ciências de Educação do Moxico (ISCED-Moxico)',
+  ],
+  'Outra': ['Outra'],
+}
+
+const angolianUniversities = Object.values(angolianUniversitiesByProvince).flat()
 
 const courses = [
   'Engenharia Informática',
@@ -145,12 +205,19 @@ export default function NewProject() {
   })
 
   const [dbUniversities, setDbUniversities] = useState([])
+  const [universityCityMap, setUniversityCityMap] = useState({})
 
   useEffect(() => {
     async function fetchUniversities() {
-      const { data } = await supabase.from('universities').select('name').order('name')
+      const { data } = await supabase.from('universities').select('name, city, province').order('name')
       if (data && data.length > 0) {
         setDbUniversities(data.map(u => u.name))
+        const cityMap = {}
+        data.forEach(u => {
+          if (u.city) cityMap[u.name] = u.city
+          else if (u.province) cityMap[u.name] = u.province
+        })
+        setUniversityCityMap(cityMap)
       }
     }
     fetchUniversities()
@@ -235,6 +302,22 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
       toast.error('Escreve um título com pelo menos 10 caracteres primeiro.')
     }
   }
+
+  // Derive city from university name for the static list (when DB has no city)
+  const deriveCityFromProvince = (universityName = '') => {
+    const name = universityName.toLowerCase()
+    if (name.includes('lubango') || name.includes('huíla') || name.includes('mandume')) return 'Lubango'
+    if (name.includes('huambo') || name.includes('ujes')) return 'Huambo'
+    if (name.includes('benguela') || name.includes('katyavala')) return 'Benguela'
+    if (name.includes('uíge') || name.includes('kimpa vita')) return 'Uíge'
+    if (name.includes('namibe') || name.includes('moçâmedes')) return 'Moçâmedes'
+    if (name.includes('cabinda')) return 'Cabinda'
+    if (name.includes('ondjiva') || name.includes('cunene')) return 'Ondjiva'
+    if (name.includes('dundo') || name.includes('lunda')) return 'Dundo'
+    if (name.includes('malanje')) return 'Malanje'
+    if (name.includes('luena') || name.includes('moxico')) return 'Luena'
+    return 'Luanda'
+  }
   // ────────────────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e) => {
@@ -246,6 +329,10 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
     }
 
     setLoading(true)
+
+    // Determine city for the cover page
+    const selectedUniversity = form.university === 'Outra' ? form.customUniversity : form.university
+    const universityCity = universityCityMap[selectedUniversity] || deriveCityFromProvince(selectedUniversity)
 
     const { data, error } = await supabase
       .from('projects')
@@ -265,7 +352,11 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
         sections: {
           academic_norm: form.academicNorm,
           db_structure: form.dbStructure,
-          projectType: form.projectType
+          projectType: form.projectType,
+          father_name: user?.user_metadata?.father_name || '',
+          mother_name: user?.user_metadata?.mother_name || '',
+          other_relatives: user?.user_metadata?.other_relatives || '',
+          university_city: universityCity,
         },
       })
       .select()
@@ -318,15 +409,66 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
           <div className="mb-8">
             <h1 className="text-3xl font-display font-bold flex items-center gap-3">
               <Sparkles className="w-8 h-8 text-primary-400" />
-              Criar Novo TCC
+              Criar Novo Projecto
             </h1>
             <p className="text-dark-400 mt-2 text-sm">
-              Escreve o título do TCC e a IA irá gerar automaticamente o tema e o problema de
-              investigação para ti.
+              Seleccione o tipo de trabalho. A IA irá gerar automaticamente o tema, o problema de
+              investigação e todas as secções do documento.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Tipo de Projecto */}
+            <div className="glass-card rounded-2xl p-6">
+              <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+                <ClipboardList className="w-5 h-5 text-primary-400" />
+                Tipo de Trabalho Académico
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => updateField('projectType', 'tcc')}
+                  className={`relative flex flex-col items-start gap-2 rounded-xl p-4 border-2 transition-all text-left ${
+                    form.projectType === 'tcc'
+                      ? 'border-primary-500 bg-primary-500/10 text-white'
+                      : 'border-white/10 bg-white/5 text-dark-400 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className={`w-5 h-5 ${form.projectType === 'tcc' ? 'text-primary-400' : 'text-dark-500'}`} />
+                    <span className="font-semibold text-sm">TCC / Monografia</span>
+                  </div>
+                  <p className="text-xs opacity-70">
+                    Trabalho de Conclusão de Curso completo com todos os capítulos: introdução, revisão de literatura, metodologia, resultados e conclusão.
+                  </p>
+                  {form.projectType === 'tcc' && (
+                    <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-primary-400" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateField('projectType', 'anteprojecto')}
+                  className={`relative flex flex-col items-start gap-2 rounded-xl p-4 border-2 transition-all text-left ${
+                    form.projectType === 'anteprojecto'
+                      ? 'border-accent-500 bg-accent-500/10 text-white'
+                      : 'border-white/10 bg-white/5 text-dark-400 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className={`w-5 h-5 ${form.projectType === 'anteprojecto' ? 'text-accent-400' : 'text-dark-500'}`} />
+                    <span className="font-semibold text-sm">Ante-Projecto</span>
+                  </div>
+                  <p className="text-xs opacity-70">
+                    Proposta de investigação prévia ao TCC com justificativa, fundamentação teórica, metodologia proposta, cronograma e orçamento.
+                  </p>
+                  {form.projectType === 'anteprojecto' && (
+                    <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-accent-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Work info */}
             <div className="glass-card rounded-2xl p-6 space-y-5">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -337,7 +479,7 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
               {/* Title — triggers AI generation on blur */}
               <div>
                 <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                  Título do TCC <span className="text-red-400">*</span>
+                  Título do {form.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'} <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -471,6 +613,18 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                     <option value="APA">APA</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-300 mb-1.5">
+                    Ano
+                  </label>
+                  <input
+                    type="number"
+                    value={form.year}
+                    onChange={(e) => updateField('year', e.target.value)}
+                    className="input-field w-full"
+                    placeholder="2026"
+                  />
+                </div>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-5">
@@ -484,9 +638,19 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                     className="input-field"
                   >
                     <option value="">Seleccionar universidade</option>
-                    {(dbUniversities.length > 0 ? dbUniversities : angolianUniversities).map((u) => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
+                    {dbUniversities.length > 0 ? (
+                      dbUniversities.map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))
+                    ) : (
+                      Object.entries(angolianUniversitiesByProvince).map(([province, unis]) => (
+                        <optgroup key={province} label={`— ${province} —`}>
+                          {unis.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </optgroup>
+                      ))
+                    )}
                   </select>
                   {form.university === 'Outra' && (
                     <input
@@ -559,31 +723,19 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">Ano</label>
-                  <input
-                    type="number"
-                    value={form.year}
-                    onChange={(e) => updateField('year', e.target.value)}
-                    className="input-field w-full"
-                    placeholder="2026"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                    Nº Máximo Páginas
-                  </label>
-                  <input
-                    type="number"
-                    min="10"
-                    max="80"
-                    value={form.maxPages}
-                    onChange={(e) => updateField('maxPages', e.target.value)}
-                    className="input-field w-full"
-                    placeholder="80"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-dark-300 mb-1.5">
+                  Nº Máximo de Páginas
+                </label>
+                <input
+                  type="number"
+                  min="10"
+                  max="120"
+                  value={form.maxPages}
+                  onChange={(e) => updateField('maxPages', e.target.value)}
+                  className="input-field w-full"
+                  placeholder="80"
+                />
               </div>
 
               <div>
@@ -628,7 +780,7 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  Avançar para Pagamento
+                  {form.projectType === 'anteprojecto' ? 'Criar Ante-Projecto' : 'Criar TCC'} — Avançar para Pagamento
                 </>
               )}
             </button>
