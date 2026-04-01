@@ -114,8 +114,12 @@ DADOS DO PROJECTO:
 ${dbStructure ? `- Dados Complementares/Amostra/Estatísticas/BD fornecidos pelo utilizador: ${dbStructure}` : ""}
 
 INSTRUÇÕES SOBRE TABELAS E GRÁFICOS:
-${dbStructure ? `O UTILIZADOR FORNECEU INFORMAÇÕES QUANTITATIVAS OU ESTRUTURAIS EXTRAS. Quando for adequado na actual secção (ex: Metodologia, Revisão ou Resultados), DEVE OBRIGATORIAMENTE gerar gráficos utilizando blocos de código \`\`\`mermaid (por exemplo gráficos tipo 'pie' para estatísticas, ou fluxogramas/UML para processos e bases de dados). Explique os gráficos no texto.` : ""}
+${dbStructure ? `O UTILIZADOR FORNECEU INFORMAÇÕES QUANTITATIVAS OU ESTRUTURAIS EXTRAS. Quando for adequado na actual secção (ex: Metodologia, Revisão ou Resultados), DEVE OBRIGATORIAMENTE gerar gráficos usando blocos \`\`\`chart (para dados estatísticos como distribuições, comparações e tendências) OU blocos \`\`\`mermaid (para fluxogramas/UML/processos). Explique cada gráfico/diagrama no texto antes e depois.` : ""}
 - Crie tabelas formatadas em formato Markdown clássico (\`| --- |\`) sempre que precisar representar estatísticas, resultados, cronogramas ou dados comparativos.
+- Para GRÁFICOS ESTATÍSTICOS (barras, pizza, linha, doughnut) use blocos \`\`\`chart com JSON Chart.js. Exemplos:
+  Gráfico de barras: {"type":"bar","data":{"labels":["A","B","C"],"datasets":[{"label":"Frequência (%)","backgroundColor":["#4F46E5","#7C3AED","#2563EB"],"data":[35,45,20]}]},"options":{"plugins":{"title":{"display":true,"text":"Título"}}}}
+  Gráfico de pizza: {"type":"pie","data":{"labels":["G1","G2","G3"],"datasets":[{"data":[40,35,25],"backgroundColor":["#4F46E5","#7C3AED","#10B981"]}]},"options":{"plugins":{"title":{"display":true,"text":"Distribuição"}}}}
+- Após cada gráfico ou tabela, adicione legenda no formato: **Figura 1:** Descrição. OU **Tabela 1:** Descrição.
 - O documento final usará as formatações das normas ${academicNorm}. Adapte o estilo dos títulos a esta norma.
 
 !!! INSTRUÇÃO DE VOLUME E ORIGINALIDADE !!!
@@ -355,7 +359,9 @@ Deve incluir:
 3.5. Tratamento e Análise dos Dados (2 parágrafos)
 - Descrever as técnicas estatísticas ou qualitativas de análise
 - Referenciar software utilizado (SPSS, Atlas.ti, NVivo, Excel, etc.)
-
+${methodology === 'quantitativa' || methodology === 'mista' ? `
+INSTRUÇÃO — GRÁFICO DE AMOSTRA: Gera OBRIGATORIAMENTE uma tabela Markdown com a caracterização da amostra (ex: distribuição por género, faixa etária ou outra variável relevante) E um gráfico \`\`\`chart "bar" ou "doughnut" ilustrando essa distribuição. Inclui legenda **Figura 1:** após o gráfico.
+` : ''}
 3.6. Limitações do Estudo (1-2 parágrafos)
 - Identificar limitações metodológicas de forma honesta e académica
 
@@ -363,13 +369,21 @@ Citar obrigatoriamente: Gil (2002, 2008), Marconi & Lakatos (2003, 2010), Prodan
 
     resultados: `${context}
 
-Gere o CAPÍTULO IV – RESULTADOS E DISCUSSÃO do TCC. Como se trata de um trabalho académico, apresente resultados simulados mas realistas e contextualmente coerentes:
+Gere o CAPÍTULO IV – RESULTADOS E DISCUSSÃO do TCC. Como se trata de um trabalho académico, apresente resultados simulados mas realistas e contextualmente coerentes para o tema "${topic}":
 
 4.1. Apresentação dos Resultados (4-5 parágrafos)
 - Descrever os dados recolhidos de forma objectiva e organizada
-- Usar linguagem descritiva e precisa
-- Referenciar tabelas e gráficos (ex: "Conforme ilustrado na Tabela 1...")
-- Apresentar dados percentuais e numéricos relevantes para o tema
+- Usar linguagem descritiva e precisa: "Conforme ilustrado na Tabela 1...", "O Gráfico 1 demonstra..."
+- Apresentar dados percentuais e numéricos REALISTAS e COERENTES com o tema
+
+INSTRUÇÃO OBRIGATÓRIA — GRÁFICOS E TABELAS NESTA SECÇÃO:
+Deves gerar PELO MENOS:
+a) UMA tabela Markdown (| --- |) com dados estatísticos (ex: distribuição da amostra por género, idade, habilitações ou variáveis do tema)
+b) UM gráfico \`\`\`chart com dados estatísticos relevantes ao tema. Use "bar" para comparações, "pie" ou "doughnut" para proporções, "line" para evolução temporal. Os dados devem ser plausíveis e contextualizados para Angola.
+c) Se aplicável, um segundo gráfico ou diagrama \`\`\`mermaid para processos ou fluxos.
+
+Exemplo de sequência para esta secção:
+[texto introdutório] → [Tabela 1 markdown] → **Tabela 1:** legenda → [análise da tabela] → [\`\`\`chart JSON\`\`\`] → **Figura 1:** legenda → [análise do gráfico]
 
 4.2. Análise e Interpretação dos Dados (3-4 parágrafos)
 - Interpretar criticamente os dados apresentados
@@ -380,9 +394,9 @@ Gere o CAPÍTULO IV – RESULTADOS E DISCUSSÃO do TCC. Como se trata de um trab
 - Comparar com investigações anteriores citadas na revisão da literatura
 - Confirmar ou refutar fundamentadamente as hipóteses formuladas
 - Destacar contribuições ORIGINAIS deste estudo para a área
-- Contextualizar os resultados no âmbito angolano: o que estes dados significam para Angola?
+- Contextualizar os resultados no âmbito angolano
 
-ANTI-PLÁGIO: Os resultados devem conter análise crítica e interpretação PRÓPRIA. Argumente sobre as causas e implicações dos resultados no contexto angolano específico.`,
+ANTI-PLÁGIO: Os resultados devem conter análise crítica e interpretação PRÓPRIA. Os dados numéricos simulados devem ser coerentes, variados e contextualmente válidos para Angola.`,
 
     conclusao: `${context}
 

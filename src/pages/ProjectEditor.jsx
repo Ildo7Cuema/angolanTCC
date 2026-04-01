@@ -41,6 +41,345 @@ const fadeUp = {
   exit: { opacity: 0, y: -10, transition: { duration: 0.2 } },
 }
 
+// ─── Tipos de gráfico disponíveis para o selector ──────────────────────────
+
+const CHART_TYPES = [
+  { id: 'bar',           label: 'Barras' },
+  { id: 'horizontalBar', label: 'H. Barras' },
+  { id: 'pie',           label: 'Pizza' },
+  { id: 'doughnut',      label: 'Anel' },
+  { id: 'line',          label: 'Linha' },
+  { id: 'radar',         label: 'Radar' },
+]
+
+// ─── Defaults de visibilidade para gráficos QuickChart ─────────────────────
+
+function applyChartDefaults(config) {
+  const type = config.type || 'bar'
+  const isCircular = ['pie', 'doughnut', 'polarArea'].includes(type)
+  const isLine    = type === 'line'
+
+  // Datalabels: mostra os valores directamente nos elementos do gráfico
+  const datalabels = isCircular
+    ? {
+        // Pizza / Anel: valor centrado dentro de cada fatia, texto branco
+        display: true,
+        color: '#FFFFFF',
+        font: { size: 14, weight: 'bold', family: 'Arial' },
+        anchor: 'center',
+        align: 'center',
+        textShadowBlur: 4,
+        textShadowColor: 'rgba(0,0,0,0.6)',
+      }
+    : {
+        // Barras / Linha: valor acima do elemento, fundo branco semi-transparente
+        display: true,
+        color: '#111827',
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        borderRadius: 3,
+        padding: { top: 2, bottom: 2, left: 5, right: 5 },
+        font: { size: 12, weight: 'bold', family: 'Arial' },
+        anchor: 'end',
+        align: isLine ? 'top' : 'end',
+        clamp: true,
+        offset: 4,
+      }
+
+  const result = {
+    ...config,
+    options: {
+      ...(config.options || {}),
+      // Espaço extra no topo para os datalabels acima das barras não ficarem cortados
+      layout: { padding: { top: isCircular ? 8 : 28, bottom: 8, left: 8, right: 8 } },
+      plugins: {
+        datalabels,
+        title: {
+          display: !!(config.options?.plugins?.title?.text),
+          font: { size: 17, weight: 'bold', family: 'Arial' },
+          color: '#111827',
+          padding: { top: 8, bottom: 16 },
+          ...(config.options?.plugins?.title || {}),
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { font: { size: 13, family: 'Arial' }, color: '#111827', padding: 16 },
+          ...(config.options?.plugins?.legend || {}),
+        },
+      },
+    },
+  }
+
+  if (!isCircular) {
+    result.options.scales = {
+      x: {
+        ticks: { font: { size: 12, family: 'Arial' }, color: '#374151', maxRotation: 45 },
+        grid: { color: '#E5E7EB' },
+        ...(config.options?.scales?.x || {}),
+      },
+      y: {
+        ticks: { font: { size: 12, family: 'Arial' }, color: '#374151' },
+        grid: { color: '#E5E7EB' },
+        grace: '15%', // espaço extra no topo para os datalabels
+        ...(config.options?.scales?.y || {}),
+      },
+    }
+  }
+
+  return result
+}
+
+// ─── Componente de Gráfico com selector de tipo ─────────────────────────────
+
+function ChartBlock({ jsonStr, onTypeChange }) {
+  const [config, setConfig] = useState(null)
+  const [parseError, setParseError] = useState(false)
+  const [imgFailed, setImgFailed] = useState(false)
+
+  useEffect(() => {
+    try {
+      setConfig(JSON.parse(jsonStr))
+      setParseError(false)
+      setImgFailed(false)
+    } catch {
+      setParseError(true)
+    }
+  }, [jsonStr])
+
+  if (parseError || !config) {
+    return (
+      <div className="my-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
+        <p className="text-red-400 text-xs">Configuração de gráfico inválida</p>
+      </div>
+    )
+  }
+
+  const currentType = config.type || 'bar'
+  const withDefaults = applyChartDefaults(config)
+  const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(withDefaults))}&w=600&h=380&backgroundColor=white&devicePixelRatio=1`
+
+  const handleTypeChange = (newType) => {
+    if (newType === currentType) return
+    const newConfig = { ...config, type: newType }
+    setConfig(newConfig)
+    setImgFailed(false)
+    onTypeChange?.(JSON.stringify(newConfig, null, 2))
+  }
+
+  return (
+    <div className="my-6 space-y-3 p-4 rounded-2xl border border-white/10 bg-white/[0.02]">
+      {/* Selector de tipo */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-dark-500 shrink-0">Tipo de gráfico:</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {CHART_TYPES.map(t => (
+            <button
+              key={t.id}
+              onClick={() => handleTypeChange(t.id)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-all font-medium ${
+                currentType === t.id
+                  ? 'bg-primary-500/25 border-primary-500/40 text-primary-300'
+                  : 'bg-white/[0.03] border-white/10 text-dark-400 hover:border-white/25 hover:text-dark-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Imagem do gráfico */}
+      <div className="flex flex-col items-center gap-2">
+        {imgFailed ? (
+          <div className="w-full h-32 rounded-xl bg-dark-800 border border-white/10 flex items-center justify-center">
+            <p className="text-dark-500 text-sm">Erro ao carregar gráfico — verifique a ligação à internet</p>
+          </div>
+        ) : (
+          <img
+            src={chartUrl}
+            alt="Gráfico de Análise"
+            className="max-w-full rounded-xl border border-white/10 shadow-md bg-white"
+            onError={() => setImgFailed(true)}
+          />
+        )}
+        <p className="text-xs text-dark-500 italic">
+          Gráfico automático · Altere o tipo acima · Exporta embutido no Word
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Componente de Tabela Markdown ─────────────────────────────────────────
+
+function MarkdownTablePreview({ lines }) {
+  const rows = []
+  let isFirstRow = true
+
+  for (const line of lines) {
+    if (/^[\s|:\-]+$/.test(line.replace(/[|]/g, ''))) continue
+    const cols = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+    if (cols.length === 0 || cols.every(c => c === '')) continue
+    rows.push({ cols, header: isFirstRow })
+    isFirstRow = false
+  }
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="overflow-x-auto my-5 rounded-xl border border-white/10 shadow-inner">
+      <table className="w-full text-sm">
+        <tbody>
+          {rows.map((row, i) => (
+            <tr
+              key={i}
+              className={row.header
+                ? 'bg-primary-500/20 font-semibold text-white text-center'
+                : 'border-t border-white/5 text-dark-300 hover:bg-white/[0.02]'
+              }
+            >
+              {row.cols.map((col, j) => (
+                <td key={j} className="px-4 py-2 border-r border-white/10 last:border-r-0 whitespace-nowrap">
+                  {col}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── Parser de conteúdo de secção ──────────────────────────────────────────
+// Converte texto com blocos especiais em React elements para preview visual.
+// onChartTypeChange(chartIdx, newJson) → callback para persistir mudança de tipo.
+
+function parseSectionContent(content, onChartTypeChange) {
+  if (!content) return []
+  const lines = content.split('\n')
+  const elements = []
+  let i = 0
+  let chartIndex = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Bloco ```chart — renderiza ChartBlock com selector de tipo
+    if (trimmed === '```chart' || trimmed.startsWith('```chart')) {
+      const chartLines = []
+      i++
+      while (i < lines.length && lines[i].trim() !== '```') {
+        chartLines.push(lines[i])
+        i++
+      }
+      const key = `chart-${i}`
+      const idx = chartIndex++
+      elements.push(
+        <ChartBlock
+          key={key}
+          jsonStr={chartLines.join('\n')}
+          onTypeChange={(newJson) => onChartTypeChange?.(idx, newJson)}
+        />
+      )
+      i++
+      continue
+    }
+
+    // Bloco ```mermaid — gera imagem via mermaid.ink
+    if (trimmed === '```mermaid') {
+      const mermaidLines = []
+      i++
+      while (i < lines.length && lines[i].trim() !== '```') {
+        mermaidLines.push(lines[i])
+        i++
+      }
+      const key = `mermaid-${i}`
+      try {
+        const mermaidCode = mermaidLines.join('\n')
+        const state = { code: mermaidCode, mermaid: { theme: 'dark' } }
+        const base64 = btoa(unescape(encodeURIComponent(JSON.stringify(state))))
+        const url = `https://mermaid.ink/img/${base64}`
+        elements.push(
+          <div key={key} className="my-6 flex flex-col items-center gap-2">
+            <img
+              src={url}
+              alt="Diagrama"
+              className="max-w-full rounded-xl border border-white/10 shadow-lg"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+            <p className="text-xs text-dark-500 italic">Diagrama</p>
+          </div>
+        )
+      } catch {
+        elements.push(<span key={key} />)
+      }
+      i++
+      continue
+    }
+
+    // Tabela Markdown — renderiza como tabela HTML estilizada
+    if (trimmed.startsWith('|') && trimmed.includes('|', 1)) {
+      const tableLines = []
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim())
+        i++
+      }
+      elements.push(<MarkdownTablePreview key={`tbl-${i}`} lines={tableLines} />)
+      continue
+    }
+
+    // Linha vazia
+    if (!trimmed) {
+      elements.push(<br key={`br-${i}`} />)
+      i++
+      continue
+    }
+
+    // Legenda de figura/tabela
+    if (/^\*\*(Figura|Tabela|Gráfico)\s*\d+/i.test(trimmed)) {
+      elements.push(
+        <p key={`cap-${i}`} className="text-center text-xs text-dark-400 italic my-1">
+          {trimmed.replace(/\*\*/g, '')}
+        </p>
+      )
+      i++
+      continue
+    }
+
+    // Títulos / cabeçalhos em negrito
+    if (
+      line.match(/^(CAPÍTULO|REFERÊNCIAS|REPÚBLICA|MINISTÉRIO|FACULDADE)/i) ||
+      line.match(/^\d+\.\d*\.?\s/) ||
+      (line.trim() === line.trim().toUpperCase() && line.trim().length > 3 && /[A-ZÀ-Ü]/.test(line))
+    ) {
+      elements.push(
+        <p key={`h-${i}`} className="font-bold text-dark-100 mt-4 mb-1">{line}</p>
+      )
+      i++
+      continue
+    }
+
+    // Bullet points
+    if (trimmed.startsWith('•') || trimmed.startsWith('- ')) {
+      elements.push(
+        <p key={`b-${i}`} className="pl-4 text-dark-300 my-0.5">{line}</p>
+      )
+      i++
+      continue
+    }
+
+    // Texto normal
+    elements.push(
+      <p key={`p-${i}`} className="text-dark-300 leading-relaxed my-1">{line}</p>
+    )
+    i++
+  }
+
+  return elements
+}
+
 export default function ProjectEditor() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -244,6 +583,29 @@ export default function ProjectEditor() {
     }
 
     setHumanizingSection(null)
+  }
+
+  // ─── Alterar tipo de gráfico inline ────────────────────────────────────
+
+  const handleChartTypeChange = async (chartIdx, newJson) => {
+    const content = project?.sections?.[activeSection] || ''
+    let count = 0
+    const updated = content.replace(/```chart\n([\s\S]*?)```/g, (match) => {
+      if (count === chartIdx) {
+        count++
+        return '```chart\n' + newJson + '\n```'
+      }
+      count++
+      return match
+    })
+    if (updated === content) return
+    const updatedSections = { ...project.sections, [activeSection]: updated }
+    setProject(prev => ({ ...prev, sections: updatedSections }))
+    try {
+      await supabase.from('projects').update({ sections: updatedSections }).eq('id', id)
+    } catch (err) {
+      console.error('Erro ao actualizar tipo de gráfico:', err)
+    }
   }
 
   // ─── Edição manual ──────────────────────────────────────────────────────
@@ -640,38 +1002,7 @@ export default function ProjectEditor() {
                   <div className="glass-card rounded-2xl p-6 sm:p-8">
                     <div className="prose prose-invert prose-sm max-w-none">
                       {sectionContent ? (
-                        sectionContent.split('\n').map((line, idx) => {
-                          if (!line.trim()) return <br key={idx} />
-                          // Bold headings
-                          if (
-                            line.match(
-                              /^(CAPÍTULO|REFERÊNCIAS|REPÚBLICA|MINISTÉRIO|FACULDADE)/i
-                            ) ||
-                            line.match(/^\d+\.\d*\.?\s/) ||
-                            line === line.toUpperCase()
-                          ) {
-                            return (
-                              <p
-                                key={idx}
-                                className="font-bold text-dark-100 mt-4 mb-1"
-                              >
-                                {line}
-                              </p>
-                            )
-                          }
-                          if (line.startsWith('•') || line.startsWith('- ')) {
-                            return (
-                              <p key={idx} className="pl-4 text-dark-300 my-0.5">
-                                {line}
-                              </p>
-                            )
-                          }
-                          return (
-                            <p key={idx} className="text-dark-300 leading-relaxed my-1">
-                              {line}
-                            </p>
-                          )
-                        })
+                        parseSectionContent(sectionContent, handleChartTypeChange)
                       ) : (
                         <div className="text-center py-12">
                           <Sparkles className="w-10 h-10 text-dark-600 mx-auto mb-3" />

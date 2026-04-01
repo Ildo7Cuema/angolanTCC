@@ -41,7 +41,7 @@ export default function PaymentPage() {
     // Buscar projecto
     const { data: projData, error: projErr } = await supabase
       .from('projects')
-      .select('title')
+      .select('title, sections')
       .eq('id', id)
       .single()
 
@@ -94,7 +94,8 @@ export default function PaymentPage() {
     }).format(amount)
   }
 
-  const whatsappMessage = encodeURIComponent(`Olá, realizei o pagamento do meu projecto.\n*Ref:* ${payment?.reference_code}\nPor favor, valide o meu acesso.`)
+  const docType = project?.sections?.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'
+  const whatsappMessage = encodeURIComponent(`Olá, realizei o pagamento do meu ${docType}.\n*Ref:* ${payment?.reference_code}\n*Valor:* ${payment?.amount ? new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA', minimumFractionDigits: 2 }).format(payment.amount) : ''}\nPor favor, valide o meu acesso.`)
   const whatsappUrl = `https://wa.me/244921923232?text=${whatsappMessage}`
 
   if (loading) {
@@ -129,7 +130,8 @@ export default function PaymentPage() {
             </div>
             <h1 className="text-2xl font-display font-bold">Resumo do Pedido</h1>
             <p className="text-dark-400 mt-2 text-sm max-w-sm mx-auto">
-              Para liberar a geração por IA do seu TCC "{project?.title}", por favor realize o pagamento.
+              Para liberar a geração por IA do seu {project?.sections?.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'}{' '}
+              <span className="text-white font-medium">"{project?.title}"</span>, por favor realize o pagamento abaixo.
             </p>
           </div>
 
@@ -154,7 +156,12 @@ export default function PaymentPage() {
             </div>
 
             <div className="mb-6">
-              <p className="text-sm text-dark-400 mb-1">Valor a pagar</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm text-dark-400">Valor a pagar</p>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-300">
+                  {project?.sections?.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC / Monografia'}
+                </span>
+              </div>
               <p className="text-3xl font-display font-bold text-white tracking-tight">
                 {formatCurrency(payment?.amount || 55000)}
               </p>
@@ -214,7 +221,7 @@ export default function PaymentPage() {
             {payment?.status === 'pago' && (
               <div className="mt-6">
                 <Link to={`/project/${id}`} className="w-full py-4 rounded-xl flex items-center justify-center gap-2 font-medium bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors border border-green-500/30">
-                  Aceder ao TCC Liberado
+                  Aceder ao {docType} Liberado
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>

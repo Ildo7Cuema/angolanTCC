@@ -6,7 +6,7 @@ import {
   Users,
   FileText,
   CreditCard,
-  DollarSign,
+  Banknote,
   CheckCircle,
   XCircle,
   Clock,
@@ -88,10 +88,10 @@ export default function AdminDashboard() {
   }
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-AO', {
-      style: 'currency',
-      currency: 'AOA',
-    }).format(value || 0)
+    return `Kz ${new Intl.NumberFormat('pt-AO', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value || 0)}`
   }
 
   if (loading) {
@@ -165,7 +165,7 @@ export default function AdminDashboard() {
                 <h3 className="text-2xl font-bold text-white">{formatCurrency(stats.total_revenue)}</h3>
               </div>
               <div className="p-3 rounded-xl bg-green-500/10 text-green-500">
-                <DollarSign className="w-6 h-6" />
+                <Banknote className="w-6 h-6" />
               </div>
             </div>
           </div>

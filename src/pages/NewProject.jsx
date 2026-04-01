@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -17,6 +17,10 @@ import {
   Wand2,
   CheckCircle2,
   ClipboardList,
+  ChevronDown,
+  X,
+  Search,
+  MapPin,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -179,12 +183,243 @@ function AIBadge({ onRegenerate, loading }) {
   )
 }
 
+/* ─── SearchSelect Component ─────────────────────────────────────────────── */
+function SearchSelect({
+  value,
+  onChange,
+  options,          // flat string[] OR grouped { [group]: string[] }
+  grouped = false,
+  placeholder = 'Pesquisar...',
+  customValue = '',
+  onCustomChange,
+  customPlaceholder = 'Digite aqui...',
+  showCustomWhen = 'Outra',
+  icon: Icon = null,
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(-1)
+  const wrapperRef = useRef(null)
+  const inputRef = useRef(null)
+  const listRef = useRef(null)
+
+  // Flat list for keyboard navigation and filtering
+  const allFlat = grouped ? Object.values(options).flat() : options
+
+  const filtered = query.trim().length > 0
+    ? allFlat.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : allFlat
+
+  // Grouped display with filtering
+  const filteredGroups = grouped
+    ? Object.entries(options)
+        .map(([group, items]) => ({
+          group,
+          items: query.trim() ? items.filter(o => o.toLowerCase().includes(query.toLowerCase())) : items,
+        }))
+        .filter(g => g.items.length > 0)
+    : null
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false)
+        setQuery('')
+        setHighlighted(-1)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlighted >= 0 && listRef.current) {
+      const el = listRef.current.querySelector(`[data-idx="${highlighted}"]`)
+      el?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlighted])
+
+  const handleSelect = (val) => {
+    onChange(val)
+    setOpen(false)
+    setQuery('')
+    setHighlighted(-1)
+    inputRef.current?.blur()
+  }
+
+  const handleClear = (e) => {
+    e.preventDefault()
+    onChange('')
+    if (onCustomChange) onCustomChange('')
+    setQuery('')
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const handleKeyDown = (e) => {
+    if (!open) { if (e.key === 'ArrowDown' || e.key === 'Enter') setOpen(true); return }
+    if (e.key === 'Escape') { setOpen(false); setQuery(''); return }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(i => Math.min(i + 1, filtered.length - 1)) }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(i => Math.max(i - 1, 0)) }
+    if (e.key === 'Enter' && highlighted >= 0) { e.preventDefault(); handleSelect(filtered[highlighted]) }
+  }
+
+  const isCustom = value === showCustomWhen
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      {/* Input trigger */}
+      <div className="relative">
+        {Icon ? (
+          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none z-10" />
+        ) : (
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none z-10" />
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          className={`input-field pl-9 pr-9 ${value && !open ? 'text-white' : ''}`}
+          placeholder={open ? 'Pesquisar...' : (value || placeholder)}
+          value={open ? query : (value || '')}
+          onChange={(e) => { setQuery(e.target.value); setHighlighted(-1) }}
+          onFocus={() => { setOpen(true); setQuery('') }}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {/* Right controls */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {value && (
+            <button
+              type="button"
+              onMouseDown={handleClear}
+              className="p-0.5 text-dark-500 hover:text-dark-200 rounded transition-colors"
+              tabIndex={-1}
+              title="Limpar"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <ChevronDown className={`w-4 h-4 text-dark-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+
+      {/* Dropdown */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scaleY: 0.96 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1 }}
+            exit={{ opacity: 0, y: -6, scaleY: 0.96 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-white/10 bg-dark-900/98 backdrop-blur-md shadow-2xl overflow-hidden"
+            style={{ transformOrigin: 'top', maxHeight: '280px' }}
+          >
+            {/* Search hint */}
+            {query.trim() && filtered.length === 0 && (
+              <div className="px-4 py-6 text-center text-sm text-dark-500">
+                <Search className="w-5 h-5 mx-auto mb-2 opacity-40" />
+                Nenhum resultado para <span className="text-dark-300">"{query}"</span>
+              </div>
+            )}
+
+            {/* Scrollable list */}
+            <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: '260px' }}>
+              {grouped && filteredGroups ? (
+                /* Grouped view */
+                filteredGroups.map(({ group, items }) => (
+                  <div key={group}>
+                    <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                      <MapPin className="w-3 h-3 text-primary-400 flex-shrink-0" />
+                      <span className="text-xs font-bold text-primary-400 uppercase tracking-wider">{group}</span>
+                    </div>
+                    {items.map((item) => {
+                      const globalIdx = filtered.indexOf(item)
+                      const isHighlighted = highlighted === globalIdx
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          data-idx={globalIdx}
+                          onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
+                          onMouseEnter={() => setHighlighted(globalIdx)}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+                            value === item
+                              ? 'bg-primary-500/15 text-primary-300 font-medium'
+                              : isHighlighted
+                              ? 'bg-white/8 text-white'
+                              : 'text-dark-300 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {value === item && <CheckCircle2 className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
+                          <span className="truncate">{item}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))
+              ) : (
+                /* Flat view */
+                filtered.map((item, idx) => (
+                  <button
+                    key={item}
+                    type="button"
+                    data-idx={idx}
+                    onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
+                    onMouseEnter={() => setHighlighted(idx)}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                      value === item
+                        ? 'bg-primary-500/15 text-primary-300 font-medium'
+                        : highlighted === idx
+                        ? 'bg-white/8 text-white'
+                        : 'text-dark-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {value === item && <CheckCircle2 className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
+                    <span className="truncate">{item}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom input when "Outra/Outro" is selected */}
+      {isCustom && onCustomChange && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="mt-2 overflow-hidden"
+        >
+          <input
+            type="text"
+            value={customValue}
+            onChange={(e) => onCustomChange(e.target.value)}
+            className="input-field"
+            placeholder={customPlaceholder}
+            autoFocus
+          />
+        </motion.div>
+      )}
+    </div>
+  )
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 export default function NewProject() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [aiGenerated, setAiGenerated] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [titleFocused, setTitleFocused] = useState(false)
+  const debounceRef = useRef(null)
+  const titleWrapperRef = useRef(null)
 
   const [form, setForm] = useState({
     title: '',
@@ -303,6 +538,135 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
     }
   }
 
+  // ─── Sugestões de Títulos em Tempo Real (debounced) ─────────────────────────
+  const fetchTitleSuggestions = useCallback(async (partialTitle) => {
+    if (!partialTitle || partialTitle.trim().length < 4) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    const course = form.course && form.course !== 'Outro' ? form.course : (form.customCourse || '')
+    const university = form.university && form.university !== 'Outra' ? form.university : (form.customUniversity || '')
+    const docLabel = form.projectType === 'anteprojecto' ? 'Ante-Projecto de Pesquisa' : 'Trabalho de Conclusão de Curso (TCC)'
+
+    setLoadingSuggestions(true)
+    setShowSuggestions(true)
+
+    const prompt = `Você é um especialista académico angolano. O estudante está a escrever o título do seu ${docLabel} e digitou até agora: "${partialTitle}".
+${course ? `Curso: ${course}.` : ''}${university ? ` Universidade: ${university}.` : ''}
+
+Com base no que foi escrito, gere exactamente 5 sugestões de títulos académicos completos e polidos que:
+- Completem ou expandam a ideia iniciada
+- Sejam relevantes para o contexto angolano de 2024/2025
+- Usem linguagem académica formal e pré-Acordo Ortográfico (objectivo, projecto, impacto, análise, etc.)
+- Sejam específicos e originais — não genéricos
+- Variem em abordagem (ex: um sobre impacto, outro sobre análise, outro sobre estratégia, etc.)
+
+Responde APENAS com JSON válido neste formato, sem texto extra:
+{"suggestions":["título 1","título 2","título 3","título 4","título 5"]}`
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) { setLoadingSuggestions(false); return }
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      const data = await invokeEdgeFunction('generate-tcc-fields', { prompt }, token, anonKey)
+
+      const raw = data?.text || ''
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('JSON inválido')
+
+      const parsed = JSON.parse(jsonMatch[0])
+      const list = Array.isArray(parsed.suggestions) ? parsed.suggestions.filter(Boolean) : []
+      setSuggestions(list)
+      if (list.length > 0) setShowSuggestions(true)
+    } catch (err) {
+      setSuggestions([])
+      console.warn('Sugestões inline:', err)
+    }
+
+    setLoadingSuggestions(false)
+  }, [form.course, form.customCourse, form.university, form.customUniversity, form.projectType])
+
+  // Gera sugestões de raiz (sem texto inicial) — botão "Inspirar"
+  const generateSuggestions = useCallback(async () => {
+    setLoadingSuggestions(true)
+    setShowSuggestions(true)
+    setSuggestions([])
+
+    const course = form.course && form.course !== 'Outro' ? form.course : (form.customCourse || 'Geral')
+    const university = form.university && form.university !== 'Outra' ? form.university : (form.customUniversity || 'Universidade angolana')
+    const docLabel = form.projectType === 'anteprojecto' ? 'Ante-Projecto de Pesquisa' : 'Trabalho de Conclusão de Curso (TCC)'
+
+    const prompt = `Você é um especialista académico angolano. Gere exactamente 6 ideias de títulos de ${docLabel} para um estudante do curso de "${course}" na ${university}.
+
+Regras: relevantes para Angola 2024/2025, académicos, específicos, pré-Acordo Ortográfico, variados em temática.
+Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) { setLoadingSuggestions(false); return }
+
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      const data = await invokeEdgeFunction('generate-tcc-fields', { prompt }, token, anonKey)
+
+      const raw = data?.text || ''
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('JSON inválido')
+
+      const parsed = JSON.parse(jsonMatch[0])
+      const list = Array.isArray(parsed.suggestions) ? parsed.suggestions.filter(Boolean) : []
+      setSuggestions(list)
+    } catch (err) {
+      toast.error('Não foi possível gerar sugestões. Tente novamente.')
+      setShowSuggestions(false)
+    }
+
+    setLoadingSuggestions(false)
+  }, [form.course, form.customCourse, form.university, form.customUniversity, form.projectType])
+
+  const handleTitleChange = (e) => {
+    const val = e.target.value
+    updateField('title', val)
+
+    // Debounce: só dispara AI após 700ms de pausa na digitação
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (val.trim().length >= 4) {
+      debounceRef.current = setTimeout(() => fetchTitleSuggestions(val), 700)
+    } else {
+      setSuggestions([])
+      setShowSuggestions(false)
+    }
+  }
+
+  const handleSelectSuggestion = (title) => {
+    updateField('title', title)
+    setShowSuggestions(false)
+    setSuggestions([])
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    generateWithAI(title)
+  }
+
+  const closeSuggestions = () => {
+    setShowSuggestions(false)
+    setSuggestions([])
+  }
+
+  // Fechar ao clicar fora
+  useEffect(() => {
+    const handler = (e) => {
+      if (titleWrapperRef.current && !titleWrapperRef.current.contains(e.target)) {
+        closeSuggestions()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Derive city from university name for the static list (when DB has no city)
   const deriveCityFromProvince = (universityName = '') => {
     const name = universityName.toLowerCase()
@@ -368,12 +732,13 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
       return
     }
 
-    const refCode = 'TCC-' + Math.random().toString(36).substring(2, 7).toUpperCase()
+    const refCode = (form.projectType === 'anteprojecto' ? 'AP-' : 'TCC-') + Math.random().toString(36).substring(2, 7).toUpperCase()
+    const paymentAmount = form.projectType === 'anteprojecto' ? 25000 : 55000
     
     const { error: payErr } = await supabase.from('payments').insert({
       user_id: user.id,
       project_id: data.id,
-      amount: 55000,
+      amount: paymentAmount,
       reference_code: refCode,
       status: 'pendente'
     })
@@ -434,15 +799,20 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                       : 'border-white/10 bg-white/5 text-dark-400 hover:border-white/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className={`w-5 h-5 ${form.projectType === 'tcc' ? 'text-primary-400' : 'text-dark-500'}`} />
-                    <span className="font-semibold text-sm">TCC / Monografia</span>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className={`w-5 h-5 ${form.projectType === 'tcc' ? 'text-primary-400' : 'text-dark-500'}`} />
+                      <span className="font-semibold text-sm">TCC / Monografia</span>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${form.projectType === 'tcc' ? 'bg-primary-500/20 text-primary-300' : 'bg-white/10 text-dark-400'}`}>
+                      55.000 AOA
+                    </span>
                   </div>
                   <p className="text-xs opacity-70">
                     Trabalho de Conclusão de Curso completo com todos os capítulos: introdução, revisão de literatura, metodologia, resultados e conclusão.
                   </p>
                   {form.projectType === 'tcc' && (
-                    <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-primary-400" />
+                    <CheckCircle2 className="absolute bottom-3 right-3 w-4 h-4 text-primary-400" />
                   )}
                 </button>
 
@@ -455,15 +825,20 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                       : 'border-white/10 bg-white/5 text-dark-400 hover:border-white/20'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <FileText className={`w-5 h-5 ${form.projectType === 'anteprojecto' ? 'text-accent-400' : 'text-dark-500'}`} />
-                    <span className="font-semibold text-sm">Ante-Projecto</span>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <FileText className={`w-5 h-5 ${form.projectType === 'anteprojecto' ? 'text-accent-400' : 'text-dark-500'}`} />
+                      <span className="font-semibold text-sm">Ante-Projecto</span>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${form.projectType === 'anteprojecto' ? 'bg-accent-500/20 text-accent-300' : 'bg-white/10 text-dark-400'}`}>
+                      25.000 AOA
+                    </span>
                   </div>
                   <p className="text-xs opacity-70">
                     Proposta de investigação prévia ao TCC com justificativa, fundamentação teórica, metodologia proposta, cronograma e orçamento.
                   </p>
                   {form.projectType === 'anteprojecto' && (
-                    <CheckCircle2 className="absolute top-3 right-3 w-4 h-4 text-accent-400" />
+                    <CheckCircle2 className="absolute bottom-3 right-3 w-4 h-4 text-accent-400" />
                   )}
                 </button>
               </div>
@@ -476,35 +851,138 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                 Informações do Trabalho
               </h2>
 
-              {/* Title — triggers AI generation on blur */}
-              <div>
-                <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                  Título do {form.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'} <span className="text-red-400">*</span>
-                </label>
+              {/* Title — inline AI autocomplete + scratch suggestions */}
+              <div ref={titleWrapperRef}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-dark-300">
+                    Título do {form.projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'} <span className="text-red-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateSuggestions}
+                    disabled={loadingSuggestions || generating}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-300 hover:text-accent-200 bg-accent-500/10 hover:bg-accent-500/20 border border-accent-500/20 px-2.5 py-1 rounded-full transition-all disabled:opacity-40"
+                    title="Gerar ideias de temas do zero"
+                  >
+                    <Lightbulb className="w-3 h-3" />
+                    Inspirar-me
+                  </button>
+                </div>
+
+                {/* Input + dropdown wrapper */}
                 <div className="relative">
                   <input
                     type="text"
                     value={form.title}
-                    onChange={(e) => updateField('title', e.target.value)}
+                    onChange={handleTitleChange}
                     onBlur={handleTitleBlur}
+                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true) }}
+                    onKeyDown={(e) => { if (e.key === 'Escape') closeSuggestions() }}
                     className="input-field pr-10"
-                    placeholder="Ex: O Impacto da IA na Educação em Angola"
+                    placeholder="Comece a escrever — a IA sugere títulos automaticamente..."
+                    autoComplete="off"
                   />
+
+                  {/* Right icon */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <AnimatePresence mode="wait">
+                      {loadingSuggestions ? (
+                        <motion.span key="spin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                          <RefreshCw className="w-4 h-4 text-accent-400 animate-spin" />
+                        </motion.span>
+                      ) : aiGenerated && !generating ? (
+                        <motion.span key="ok" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Inline dropdown */}
                   <AnimatePresence>
-                    {aiGenerated && !generating && (
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2"
+                    {showSuggestions && (loadingSuggestions || suggestions.length > 0) && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                        exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-accent-500/25 bg-dark-900/95 backdrop-blur-sm shadow-2xl overflow-hidden"
+                        style={{ transformOrigin: 'top' }}
                       >
-                        <CheckCircle2 className="w-5 h-5 text-green-400" />
-                      </motion.span>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+                          <span className="text-xs font-medium text-accent-400 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3" />
+                            {loadingSuggestions
+                              ? 'IA a gerar sugestões…'
+                              : `${suggestions.length} sugestões — clique para usar`}
+                          </span>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); closeSuggestions() }}
+                            className="text-dark-500 hover:text-dark-300 p-0.5 rounded transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Loading skeletons */}
+                        {loadingSuggestions && (
+                          <div className="p-2 space-y-1.5">
+                            {[85, 70, 90, 65, 80].map((w, i) => (
+                              <div
+                                key={i}
+                                className="h-8 rounded-lg bg-white/5 animate-pulse"
+                                style={{ width: `${w}%` }}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Suggestion items */}
+                        {!loadingSuggestions && (
+                          <div className="py-1">
+                            {suggestions.map((s, i) => (
+                              <motion.button
+                                key={`${s}-${i}`}
+                                type="button"
+                                initial={{ opacity: 0, x: -6 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.05 }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  handleSelectSuggestion(s)
+                                }}
+                                className="w-full text-left px-3 py-2.5 text-sm text-dark-200 hover:text-white hover:bg-accent-500/10 transition-colors flex items-center gap-2.5 group"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5 text-accent-400 flex-shrink-0 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <span className="leading-snug">{s}</span>
+                              </motion.button>
+                            ))}
+
+                            {/* Regenerate inline */}
+                            <div className="border-t border-white/5 px-3 py-2">
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  fetchTitleSuggestions(form.title)
+                                }}
+                                className="text-xs text-dark-500 hover:text-accent-300 flex items-center gap-1.5 transition-colors"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Gerar outras sugestões
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
+
                 <p className="text-xs text-dark-500 mt-1.5">
-                  Sai do campo após escrever para a IA gerar os campos abaixo automaticamente.
+                  A IA sugere títulos automaticamente enquanto escreve. Use <strong className="text-accent-400">Inspirar-me</strong> para ideias do zero. Ao sair do campo, o tema e o problema são gerados.
                 </p>
               </div>
 
@@ -632,60 +1110,35 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
                   <label className="block text-sm font-medium text-dark-300 mb-1.5">
                     Universidade <span className="text-red-400">*</span>
                   </label>
-                  <select
+                  <SearchSelect
                     value={form.university}
-                    onChange={(e) => updateField('university', e.target.value)}
-                    className="input-field"
-                  >
-                    <option value="">Seleccionar universidade</option>
-                    {dbUniversities.length > 0 ? (
-                      dbUniversities.map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))
-                    ) : (
-                      Object.entries(angolianUniversitiesByProvince).map(([province, unis]) => (
-                        <optgroup key={province} label={`— ${province} —`}>
-                          {unis.map((u) => (
-                            <option key={u} value={u}>{u}</option>
-                          ))}
-                        </optgroup>
-                      ))
-                    )}
-                  </select>
-                  {form.university === 'Outra' && (
-                    <input
-                      type="text"
-                      value={form.customUniversity}
-                      onChange={(e) => updateField('customUniversity', e.target.value)}
-                      className="input-field mt-3"
-                      placeholder="Digite o nome da Universidade"
-                    />
-                  )}
+                    onChange={(val) => updateField('university', val)}
+                    options={dbUniversities.length > 0 ? dbUniversities : angolianUniversitiesByProvince}
+                    grouped={dbUniversities.length === 0}
+                    placeholder="Pesquisar universidade..."
+                    showCustomWhen="Outra"
+                    customValue={form.customUniversity}
+                    onCustomChange={(val) => updateField('customUniversity', val)}
+                    customPlaceholder="Digite o nome da Universidade"
+                    icon={GraduationCap}
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-dark-300 mb-1.5">
                     Curso <span className="text-red-400">*</span>
                   </label>
-                  <select
+                  <SearchSelect
                     value={form.course}
-                    onChange={(e) => updateField('course', e.target.value)}
-                    className="input-field"
-                  >
-                    <option value="">Seleccionar curso</option>
-                    {courses.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                  {form.course === 'Outro' && (
-                    <input
-                      type="text"
-                      value={form.customCourse}
-                      onChange={(e) => updateField('customCourse', e.target.value)}
-                      className="input-field mt-3"
-                      placeholder="Digite o nome do Curso"
-                    />
-                  )}
+                    onChange={(val) => updateField('course', val)}
+                    options={courses}
+                    placeholder="Pesquisar curso..."
+                    showCustomWhen="Outro"
+                    customValue={form.customCourse}
+                    onCustomChange={(val) => updateField('customCourse', val)}
+                    customPlaceholder="Digite o nome do Curso"
+                    icon={BookOpen}
+                  />
                 </div>
               </div>
 
@@ -780,7 +1233,10 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  {form.projectType === 'anteprojecto' ? 'Criar Ante-Projecto' : 'Criar TCC'} — Avançar para Pagamento
+                  {form.projectType === 'anteprojecto' ? 'Criar Ante-Projecto' : 'Criar TCC'}
+                  <span className="ml-1 text-sm font-normal opacity-80">
+                    — {form.projectType === 'anteprojecto' ? '25.000 AOA' : '55.000 AOA'}
+                  </span>
                 </>
               )}
             </button>
