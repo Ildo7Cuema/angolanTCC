@@ -126,7 +126,142 @@ BEGIN
 END;
 $$;
 
--- 5. Seed universities by province (Angola)
+-- 5. Admin Settings table (period control for dashboard stats)
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+  id integer PRIMARY KEY DEFAULT 1,
+  stats_reset_at timestamp with time zone DEFAULT '2020-01-01 00:00:00+00'::timestamptz NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+INSERT INTO public.admin_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can manage settings" ON public.admin_settings;
+CREATE POLICY "Admins can manage settings" ON public.admin_settings
+  FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+-- 6. Login logs table (access tracking)
+CREATE TABLE IF NOT EXISTS public.login_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  logged_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.login_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can log their own logins" ON public.login_logs;
+CREATE POLICY "Users can log their own logins" ON public.login_logs
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins can view all login logs" ON public.login_logs;
+CREATE POLICY "Admins can view all login logs" ON public.login_logs
+  FOR SELECT TO authenticated USING (public.is_admin());
+
+-- Updated get_dashboard_stats: respects the stats_reset_at period
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  total_users INT;
+  total_projects INT;
+  total_revenue NUMERIC;
+  pending_payments INT;
+  reset_date timestamp with time zone;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  SELECT stats_reset_at INTO reset_date FROM public.admin_settings WHERE id = 1;
+  IF reset_date IS NULL THEN
+    reset_date := '2020-01-01 00:00:00+00'::timestamptz;
+  END IF;
+
+  SELECT count(*) INTO total_users FROM auth.users WHERE created_at >= reset_date;
+  SELECT count(*) INTO total_projects FROM public.projects WHERE created_at >= reset_date;
+  SELECT coalesce(sum(amount), 0) INTO total_revenue
+    FROM public.payments WHERE status = 'pago' AND created_at >= reset_date;
+  SELECT count(*) INTO pending_payments
+    FROM public.payments WHERE status = 'pendente' AND created_at >= reset_date;
+
+  RETURN json_build_object(
+    'total_users', total_users,
+    'total_projects', total_projects,
+    'total_revenue', total_revenue,
+    'pending_payments', pending_payments,
+    'stats_since', reset_date
+  );
+END;
+$$;
+
+-- Reset stats period (sets stats_reset_at to now, data is preserved)
+CREATE OR REPLACE FUNCTION public.reset_dashboard_stats()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+  UPDATE public.admin_settings
+    SET stats_reset_at = now(), updated_at = now()
+    WHERE id = 1;
+END;
+$$;
+
+-- Access statistics function (daily/monthly/yearly login counts)
+CREATE OR REPLACE FUNCTION public.get_access_stats()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  today_count INT;
+  month_count INT;
+  year_count INT;
+  daily_breakdown json;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  SELECT count(*) INTO today_count
+    FROM public.login_logs
+    WHERE logged_at >= date_trunc('day', now() AT TIME ZONE 'UTC');
+
+  SELECT count(*) INTO month_count
+    FROM public.login_logs
+    WHERE logged_at >= date_trunc('month', now() AT TIME ZONE 'UTC');
+
+  SELECT count(*) INTO year_count
+    FROM public.login_logs
+    WHERE logged_at >= date_trunc('year', now() AT TIME ZONE 'UTC');
+
+  SELECT json_agg(d ORDER BY d.date)
+  INTO daily_breakdown
+  FROM (
+    SELECT
+      date_trunc('day', logged_at)::date AS date,
+      count(*) AS count
+    FROM public.login_logs
+    WHERE logged_at >= now() - INTERVAL '30 days'
+    GROUP BY date_trunc('day', logged_at)::date
+  ) d;
+
+  RETURN json_build_object(
+    'today', today_count,
+    'month', month_count,
+    'year', year_count,
+    'daily_breakdown', coalesce(daily_breakdown, '[]'::json)
+  );
+END;
+$$;
+
+-- 7. Seed universities by province (Angola)
 -- Universidades de Luanda
 INSERT INTO public.universities (name, province, city, logo_url) VALUES
   ('Universidade Agostinho Neto (UAN)', 'Luanda', 'Luanda', 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Universidade_Agostinho_Neto_logo.png/320px-Universidade_Agostinho_Neto_logo.png'),

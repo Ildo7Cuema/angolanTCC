@@ -49,6 +49,14 @@ export function AuthProvider({ children }) {
       email,
       password,
     })
+    // Record login event for access statistics (non-blocking, silent on error)
+    if (!error && data?.user) {
+      supabase
+        .from('login_logs')
+        .insert({ user_id: data.user.id })
+        .then(() => {})
+        .catch(() => {})
+    }
     return { data, error }
   }
 

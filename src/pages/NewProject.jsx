@@ -19,8 +19,7 @@ import {
   ClipboardList,
   ChevronDown,
   X,
-  Search,
-  MapPin,
+  Layers,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -119,7 +118,65 @@ const courses = [
   'Arquitectura',
   'Engenharia Civil',
   'Engenharia Electrónica',
-  'Outro',
+]
+
+const knowledgeAreas = [
+  // Tecnologia & Informática
+  'Sistemas de Informação',
+  'Segurança Informática',
+  'Inteligência Artificial e Machine Learning',
+  'Redes e Telecomunicações',
+  'Desenvolvimento de Software',
+  'Computação em Nuvem',
+  'Internet das Coisas (IoT)',
+  // Gestão & Economia
+  'Gestão de Projectos',
+  'Finanças e Investimentos',
+  'Marketing e Estratégia Empresarial',
+  'Recursos Humanos e Gestão de Pessoas',
+  'Comércio Internacional',
+  'Empreendedorismo',
+  // Contabilidade & Auditoria
+  'Contabilidade Financeira',
+  'Auditoria e Controlo Interno',
+  'Fiscalidade e Tributação',
+  // Direito
+  'Direito Comercial e Empresarial',
+  'Direito Penal',
+  'Direito Constitucional',
+  'Direito do Trabalho',
+  'Direito Internacional',
+  // Saúde
+  'Saúde Pública e Epidemiologia',
+  'Cuidados de Enfermagem',
+  'Saúde Materno-Infantil',
+  'Gestão Hospitalar',
+  // Educação
+  'Pedagogia e Didáctica',
+  'Educação Inclusiva',
+  'Gestão Escolar',
+  'Tecnologias na Educação',
+  // Ciências Sociais & Humanas
+  'Ciências Políticas e Governação',
+  'Relações Internacionais',
+  'Sociologia Urbana',
+  'Psicologia Clínica',
+  'Psicologia Organizacional',
+  'Comunicação e Jornalismo',
+  // Engenharia & Construção
+  'Construção Civil e Infraestrutura',
+  'Engenharia Eléctrica',
+  'Energias Renováveis',
+  'Gestão da Construção',
+  // Ambiente & Agricultura
+  'Meio Ambiente e Sustentabilidade',
+  'Agricultura e Desenvolvimento Rural',
+  'Recursos Hídricos',
+  // Angola específico
+  'Desenvolvimento Económico de Angola',
+  'Políticas Públicas em Angola',
+  'Petróleo e Gás',
+  'Mineração e Recursos Naturais',
 ]
 
 function traduzirErroIA(detail) {
@@ -183,229 +240,6 @@ function AIBadge({ onRegenerate, loading }) {
   )
 }
 
-/* ─── SearchSelect Component ─────────────────────────────────────────────── */
-function SearchSelect({
-  value,
-  onChange,
-  options,          // flat string[] OR grouped { [group]: string[] }
-  grouped = false,
-  placeholder = 'Pesquisar...',
-  customValue = '',
-  onCustomChange,
-  customPlaceholder = 'Digite aqui...',
-  showCustomWhen = 'Outra',
-  icon: Icon = null,
-}) {
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-  const [highlighted, setHighlighted] = useState(-1)
-  const wrapperRef = useRef(null)
-  const inputRef = useRef(null)
-  const listRef = useRef(null)
-
-  // Flat list for keyboard navigation and filtering
-  const allFlat = grouped ? Object.values(options).flat() : options
-
-  const filtered = query.trim().length > 0
-    ? allFlat.filter(o => o.toLowerCase().includes(query.toLowerCase()))
-    : allFlat
-
-  // Grouped display with filtering
-  const filteredGroups = grouped
-    ? Object.entries(options)
-        .map(([group, items]) => ({
-          group,
-          items: query.trim() ? items.filter(o => o.toLowerCase().includes(query.toLowerCase())) : items,
-        }))
-        .filter(g => g.items.length > 0)
-    : null
-
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setOpen(false)
-        setQuery('')
-        setHighlighted(-1)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  // Scroll highlighted item into view
-  useEffect(() => {
-    if (highlighted >= 0 && listRef.current) {
-      const el = listRef.current.querySelector(`[data-idx="${highlighted}"]`)
-      el?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlighted])
-
-  const handleSelect = (val) => {
-    onChange(val)
-    setOpen(false)
-    setQuery('')
-    setHighlighted(-1)
-    inputRef.current?.blur()
-  }
-
-  const handleClear = (e) => {
-    e.preventDefault()
-    onChange('')
-    if (onCustomChange) onCustomChange('')
-    setQuery('')
-    setTimeout(() => inputRef.current?.focus(), 0)
-  }
-
-  const handleKeyDown = (e) => {
-    if (!open) { if (e.key === 'ArrowDown' || e.key === 'Enter') setOpen(true); return }
-    if (e.key === 'Escape') { setOpen(false); setQuery(''); return }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(i => Math.min(i + 1, filtered.length - 1)) }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(i => Math.max(i - 1, 0)) }
-    if (e.key === 'Enter' && highlighted >= 0) { e.preventDefault(); handleSelect(filtered[highlighted]) }
-  }
-
-  const isCustom = value === showCustomWhen
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      {/* Input trigger */}
-      <div className="relative">
-        {Icon ? (
-          <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none z-10" />
-        ) : (
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none z-10" />
-        )}
-        <input
-          ref={inputRef}
-          type="text"
-          className={`input-field pl-9 pr-9 ${value && !open ? 'text-white' : ''}`}
-          placeholder={open ? 'Pesquisar...' : (value || placeholder)}
-          value={open ? query : (value || '')}
-          onChange={(e) => { setQuery(e.target.value); setHighlighted(-1) }}
-          onFocus={() => { setOpen(true); setQuery('') }}
-          onKeyDown={handleKeyDown}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        {/* Right controls */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {value && (
-            <button
-              type="button"
-              onMouseDown={handleClear}
-              className="p-0.5 text-dark-500 hover:text-dark-200 rounded transition-colors"
-              tabIndex={-1}
-              title="Limpar"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <ChevronDown className={`w-4 h-4 text-dark-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </div>
-      </div>
-
-      {/* Dropdown */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scaleY: 0.96 }}
-            animate={{ opacity: 1, y: 0, scaleY: 1 }}
-            exit={{ opacity: 0, y: -6, scaleY: 0.96 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-white/10 bg-dark-900/98 backdrop-blur-md shadow-2xl overflow-hidden"
-            style={{ transformOrigin: 'top', maxHeight: '280px' }}
-          >
-            {/* Search hint */}
-            {query.trim() && filtered.length === 0 && (
-              <div className="px-4 py-6 text-center text-sm text-dark-500">
-                <Search className="w-5 h-5 mx-auto mb-2 opacity-40" />
-                Nenhum resultado para <span className="text-dark-300">"{query}"</span>
-              </div>
-            )}
-
-            {/* Scrollable list */}
-            <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: '260px' }}>
-              {grouped && filteredGroups ? (
-                /* Grouped view */
-                filteredGroups.map(({ group, items }) => (
-                  <div key={group}>
-                    <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-                      <MapPin className="w-3 h-3 text-primary-400 flex-shrink-0" />
-                      <span className="text-xs font-bold text-primary-400 uppercase tracking-wider">{group}</span>
-                    </div>
-                    {items.map((item) => {
-                      const globalIdx = filtered.indexOf(item)
-                      const isHighlighted = highlighted === globalIdx
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          data-idx={globalIdx}
-                          onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
-                          onMouseEnter={() => setHighlighted(globalIdx)}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
-                            value === item
-                              ? 'bg-primary-500/15 text-primary-300 font-medium'
-                              : isHighlighted
-                              ? 'bg-white/8 text-white'
-                              : 'text-dark-300 hover:text-white hover:bg-white/5'
-                          }`}
-                        >
-                          {value === item && <CheckCircle2 className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
-                          <span className="truncate">{item}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ))
-              ) : (
-                /* Flat view */
-                filtered.map((item, idx) => (
-                  <button
-                    key={item}
-                    type="button"
-                    data-idx={idx}
-                    onMouseDown={(e) => { e.preventDefault(); handleSelect(item) }}
-                    onMouseEnter={() => setHighlighted(idx)}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
-                      value === item
-                        ? 'bg-primary-500/15 text-primary-300 font-medium'
-                        : highlighted === idx
-                        ? 'bg-white/8 text-white'
-                        : 'text-dark-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {value === item && <CheckCircle2 className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />}
-                    <span className="truncate">{item}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Custom input when "Outra/Outro" is selected */}
-      {isCustom && onCustomChange && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="mt-2 overflow-hidden"
-        >
-          <input
-            type="text"
-            value={customValue}
-            onChange={(e) => onCustomChange(e.target.value)}
-            className="input-field"
-            placeholder={customPlaceholder}
-            autoFocus
-          />
-        </motion.div>
-      )}
-    </div>
-  )
-}
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 export default function NewProject() {
@@ -424,12 +258,10 @@ export default function NewProject() {
   const [form, setForm] = useState({
     title: '',
     university: '',
-    customUniversity: '',
     academicNorm: 'ABNT',
     projectType: 'tcc', // 'tcc' or 'anteprojecto'
     dbStructure: '',
     course: '',
-    customCourse: '',
     studentName: user?.user_metadata?.full_name || '',
     advisor: '',
     topic: '',
@@ -437,6 +269,7 @@ export default function NewProject() {
     methodology: '',
     year: new Date().getFullYear().toString(),
     maxPages: 80,
+    knowledgeArea: '',
   })
 
   const [dbUniversities, setDbUniversities] = useState([])
@@ -546,15 +379,16 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
       return
     }
 
-    const course = form.course && form.course !== 'Outro' ? form.course : (form.customCourse || '')
-    const university = form.university && form.university !== 'Outra' ? form.university : (form.customUniversity || '')
+    const course = form.course.trim() || ''
+    const university = form.university.trim() || ''
     const docLabel = form.projectType === 'anteprojecto' ? 'Ante-Projecto de Pesquisa' : 'Trabalho de Conclusão de Curso (TCC)'
+    const knowledgeArea = form.knowledgeArea?.trim() || ''
 
     setLoadingSuggestions(true)
     setShowSuggestions(true)
 
     const prompt = `Você é um especialista académico angolano. O estudante está a escrever o título do seu ${docLabel} e digitou até agora: "${partialTitle}".
-${course ? `Curso: ${course}.` : ''}${university ? ` Universidade: ${university}.` : ''}
+${course ? `Curso: ${course}.` : ''}${university ? ` Universidade: ${university}.` : ''}${knowledgeArea ? ` Área/Campo de Conhecimento: ${knowledgeArea}.` : ''}
 
 Com base no que foi escrito, gere exactamente 5 sugestões de títulos académicos completos e polidos que:
 - Completem ou expandam a ideia iniciada
@@ -562,7 +396,7 @@ Com base no que foi escrito, gere exactamente 5 sugestões de títulos académic
 - Usem linguagem académica formal e pré-Acordo Ortográfico (objectivo, projecto, impacto, análise, etc.)
 - Sejam específicos e originais — não genéricos
 - Variem em abordagem (ex: um sobre impacto, outro sobre análise, outro sobre estratégia, etc.)
-
+${knowledgeArea ? `- Todos os títulos devem estar relacionados com a área de "${knowledgeArea}"\n` : ''}
 Responde APENAS com JSON válido neste formato, sem texto extra:
 {"suggestions":["título 1","título 2","título 3","título 4","título 5"]}`
 
@@ -588,7 +422,7 @@ Responde APENAS com JSON válido neste formato, sem texto extra:
     }
 
     setLoadingSuggestions(false)
-  }, [form.course, form.customCourse, form.university, form.customUniversity, form.projectType])
+  }, [form.course, form.university, form.projectType, form.knowledgeArea])
 
   // Gera sugestões de raiz (sem texto inicial) — botão "Inspirar"
   const generateSuggestions = useCallback(async () => {
@@ -596,13 +430,21 @@ Responde APENAS com JSON válido neste formato, sem texto extra:
     setShowSuggestions(true)
     setSuggestions([])
 
-    const course = form.course && form.course !== 'Outro' ? form.course : (form.customCourse || 'Geral')
-    const university = form.university && form.university !== 'Outra' ? form.university : (form.customUniversity || 'Universidade angolana')
+    const course = form.course.trim() || 'Geral'
+    const university = form.university.trim() || 'Universidade angolana'
     const docLabel = form.projectType === 'anteprojecto' ? 'Ante-Projecto de Pesquisa' : 'Trabalho de Conclusão de Curso (TCC)'
+    const knowledgeArea = form.knowledgeArea?.trim() || ''
 
-    const prompt = `Você é um especialista académico angolano. Gere exactamente 6 ideias de títulos de ${docLabel} para um estudante do curso de "${course}" na ${university}.
+    const areaClause = knowledgeArea
+      ? `, com foco específico na área de "${knowledgeArea}"`
+      : ''
+    const areaRule = knowledgeArea
+      ? `\n- Todos os títulos devem estar relacionados com a área de "${knowledgeArea}".`
+      : ''
 
-Regras: relevantes para Angola 2024/2025, académicos, específicos, pré-Acordo Ortográfico, variados em temática.
+    const prompt = `Você é um especialista académico angolano. Gere exactamente 6 ideias de títulos de ${docLabel} para um estudante do curso de "${course}" na ${university}${areaClause}.
+
+Regras: relevantes para Angola 2024/2025, académicos, específicos, pré-Acordo Ortográfico, variados em abordagem (impacto, análise, estratégia, avaliação, etc.).${areaRule}
 Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
 
     try {
@@ -626,7 +468,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
     }
 
     setLoadingSuggestions(false)
-  }, [form.course, form.customCourse, form.university, form.customUniversity, form.projectType])
+  }, [form.course, form.university, form.projectType, form.knowledgeArea])
 
   const handleTitleChange = (e) => {
     const val = e.target.value
@@ -687,7 +529,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!form.title || !form.university || (form.university === 'Outra' && !form.customUniversity) || !form.course || (form.course === 'Outro' && !form.customCourse) || !form.topic) {
+    if (!form.title || !form.university.trim() || !form.course.trim() || !form.topic) {
       toast.error('Preencha os campos obrigatórios: Título, Universidade, Curso e Tema.')
       return
     }
@@ -695,16 +537,15 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
     setLoading(true)
 
     // Determine city for the cover page
-    const selectedUniversity = form.university === 'Outra' ? form.customUniversity : form.university
-    const universityCity = universityCityMap[selectedUniversity] || deriveCityFromProvince(selectedUniversity)
+    const universityCity = universityCityMap[form.university] || deriveCityFromProvince(form.university)
 
     const { data, error } = await supabase
       .from('projects')
       .insert({
         user_id: user.id,
         title: form.title,
-        university: form.university === 'Outra' ? form.customUniversity : form.university,
-        course: form.course === 'Outro' ? form.customCourse : form.course,
+        university: form.university,
+        course: form.course,
         student_name: form.studentName,
         advisor: form.advisor,
         topic: form.topic,
@@ -850,6 +691,45 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                 <FileText className="w-5 h-5 text-primary-400" />
                 Informações do Trabalho
               </h2>
+
+              {/* Campo do Conhecimento — contexto para o "Inspirar-me" */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium text-dark-300 mb-1.5">
+                  <Layers className="w-4 h-4 text-accent-400" />
+                  Campo / Área de Conhecimento
+                  <span className="text-xs text-dark-500 font-normal ml-1">(opcional — melhora as sugestões da IA)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="knowledge-areas-list"
+                    value={form.knowledgeArea}
+                    onChange={(e) => updateField('knowledgeArea', e.target.value)}
+                    className="input-field pl-10"
+                    placeholder="Ex: Segurança Informática, Saúde Pública, Direito Comercial…"
+                    autoComplete="off"
+                  />
+                  <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none" />
+                  {form.knowledgeArea && (
+                    <button
+                      type="button"
+                      onClick={() => updateField('knowledgeArea', '')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors"
+                      title="Limpar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <datalist id="knowledge-areas-list">
+                  {knowledgeAreas.map((area) => (
+                    <option key={area} value={area} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-dark-500 mt-1">
+                  Seleccione ou escreva a área temática — a IA usará este contexto ao gerar sugestões de títulos.
+                </p>
+              </div>
 
               {/* Title — inline AI autocomplete + scratch suggestions */}
               <div ref={titleWrapperRef}>
@@ -1110,35 +990,68 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                   <label className="block text-sm font-medium text-dark-300 mb-1.5">
                     Universidade <span className="text-red-400">*</span>
                   </label>
-                  <SearchSelect
-                    value={form.university}
-                    onChange={(val) => updateField('university', val)}
-                    options={dbUniversities.length > 0 ? dbUniversities : angolianUniversitiesByProvince}
-                    grouped={dbUniversities.length === 0}
-                    placeholder="Pesquisar universidade..."
-                    showCustomWhen="Outra"
-                    customValue={form.customUniversity}
-                    onCustomChange={(val) => updateField('customUniversity', val)}
-                    customPlaceholder="Digite o nome da Universidade"
-                    icon={GraduationCap}
-                  />
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      list="universities-list"
+                      value={form.university}
+                      onChange={(e) => updateField('university', e.target.value)}
+                      className="input-field pl-10 pr-8"
+                      placeholder="Escreva ou seleccione a universidade..."
+                      autoComplete="off"
+                    />
+                    {form.university && (
+                      <button
+                        type="button"
+                        onClick={() => updateField('university', '')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors"
+                        title="Limpar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <datalist id="universities-list">
+                    {(dbUniversities.length > 0 ? dbUniversities : angolianUniversities).map((u) => (
+                      <option key={u} value={u} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-dark-500 mt-1">Escreva ou seleccione da lista de sugestões.</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-dark-300 mb-1.5">
                     Curso <span className="text-red-400">*</span>
                   </label>
-                  <SearchSelect
-                    value={form.course}
-                    onChange={(val) => updateField('course', val)}
-                    options={courses}
-                    placeholder="Pesquisar curso..."
-                    showCustomWhen="Outro"
-                    customValue={form.customCourse}
-                    onCustomChange={(val) => updateField('customCourse', val)}
-                    customPlaceholder="Digite o nome do Curso"
-                    icon={BookOpen}
-                  />
+                  <div className="relative">
+                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      list="courses-list"
+                      value={form.course}
+                      onChange={(e) => updateField('course', e.target.value)}
+                      className="input-field pl-10 pr-8"
+                      placeholder="Escreva ou seleccione o curso..."
+                      autoComplete="off"
+                    />
+                    {form.course && (
+                      <button
+                        type="button"
+                        onClick={() => updateField('course', '')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors"
+                        title="Limpar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <datalist id="courses-list">
+                    {courses.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-dark-500 mt-1">Escreva ou seleccione da lista de sugestões.</p>
                 </div>
               </div>
 

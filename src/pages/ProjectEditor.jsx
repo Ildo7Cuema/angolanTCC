@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -397,6 +398,8 @@ export default function ProjectEditor() {
   const [editContent, setEditContent] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const textareaRef = useRef(null)
 
   // ─── Carregar projecto ──────────────────────────────────────────────────
@@ -641,15 +644,15 @@ export default function ProjectEditor() {
     toast.success('Conteúdo copiado!')
   }
 
-  const handleDeleteProject = async () => {
-    if (
-      !window.confirm(
-        'Tem a certeza que quer eliminar este projecto? Esta acção é irreversível.'
-      )
-    )
-      return
+  const handleDeleteProject = () => {
+    setShowDeleteDialog(true)
+  }
 
+  const confirmDeleteProject = async () => {
+    setDeleting(true)
     const { error } = await supabase.from('projects').delete().eq('id', id)
+    setDeleting(false)
+    setShowDeleteDialog(false)
     if (error) {
       toast.error('Erro ao eliminar projecto')
     } else {
@@ -1027,6 +1030,19 @@ export default function ProjectEditor() {
           )}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        variant="danger"
+        title="Eliminar Projecto"
+        message="Tens a certeza que queres eliminar este projecto? Todos os dados e conteúdo gerado serão perdidos."
+        detail="Esta acção é irreversível. O projecto será permanentemente eliminado."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        loading={deleting}
+        onConfirm={confirmDeleteProject}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   )
 }
