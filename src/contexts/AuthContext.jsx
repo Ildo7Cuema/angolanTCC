@@ -25,7 +25,23 @@ export function AuthProvider({ children }) {
       }
     )
 
-    return () => subscription.unsubscribe()
+    // Refresh proactivo: verifica a cada 4 minutos se o JWT vai expirar em breve
+    const refreshInterval = setInterval(async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (!currentSession) return
+
+      const expiresAt = currentSession.expires_at // unix timestamp (segundos)
+      const now = Math.floor(Date.now() / 1000)
+      // Se faltam menos de 5 minutos para expirar, fazer refresh agora
+      if (expiresAt && expiresAt - now < 300) {
+        await supabase.auth.refreshSession()
+      }
+    }, 4 * 60 * 1000) // 4 minutos
+
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(refreshInterval)
+    }
   }, [])
 
   const signUp = async (email, password, fullName, familyMeta = {}) => {

@@ -9,13 +9,14 @@ import NewProject from './pages/NewProject'
 import ProjectEditor from './pages/ProjectEditor'
 import PaymentPage from './pages/PaymentPage'
 import AdminDashboard from './pages/AdminDashboard'
+import FloatingBackground from './components/FloatingBackground'
 
 function AdminRoute({ children }) {
   const { user, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-950">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="loading-spinner" />
       </div>
     )
@@ -32,7 +33,7 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-950">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="loading-spinner" />
       </div>
     )
@@ -50,7 +51,7 @@ function PublicRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-950">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="loading-spinner" />
       </div>
     )
@@ -67,28 +68,32 @@ export default function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="bg-mesh" />
+        <FloatingBackground />
         <Toaster
           position="top-right"
           toastOptions={{
             style: {
-              background: '#1e293b',
-              color: '#f1f5f9',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: '#FFFFFF',
+              color: '#1E293B',
+              border: '1px solid #E2E8F0',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             },
           }}
         />
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/new-project" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
-          <Route path="/project/:id" element={<ProtectedRoute><ProjectEditor /></ProtectedRoute>} />
-          <Route path="/payment/:id" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
-          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <div className="relative z-10 flex-1 flex flex-col">
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/new-project" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
+            <Route path="/project/:id" element={<ProtectedRoute><ProjectEditor /></ProtectedRoute>} />
+            <Route path="/payment/:id" element={<ProtectedRoute><PaymentPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </Router>
     </AuthProvider>
   )

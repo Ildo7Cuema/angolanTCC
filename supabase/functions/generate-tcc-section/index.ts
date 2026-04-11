@@ -27,9 +27,10 @@ REGRAS OBRIGATÓRIAS — QUALIDADE ACADÉMICA:
 10. Adapte a profundidade da secção ao limite máximo de páginas definido para o projecto global.
 11. NÃO inclua instruções, notas ao utilizador, ou placeholders como "[inserir dados]".
 12. Gere o texto COMPLETO e pronto para uso académico.
+13. ESTRITAMENTE PROIBIDO: NUNCA use entidades HTML de espaço como "&nbsp;" ou "&amp;nbsp;". Use apenas formatação Markdown pura com espaços normais.
 
 REGRAS ANTI-PLÁGIO — ORIGINALIDADE GARANTIDA:
-13. Cada secção gerada deve conter análise PRÓPRIA e pensamento CRÍTICO — não apenas resumo de fontes.
+14. Cada secção gerada deve conter análise PRÓPRIA e pensamento CRÍTICO — não apenas resumo de fontes.
 14. Quando citar autores, SEMPRE parafraseie as ideias em vez de copiar literalmente. Use frases como "Na perspectiva de [Autor] ([Ano])...", "Segundo [Autor] ([Ano]), este fenómeno..." 
 15. Combine MÚLTIPLAS perspectivas teóricas para criar sínteses originais — isto é o que diferencia um bom académico.
 16. Inclua SEMPRE contextualização para Angola: como o fenómeno se manifesta especificamente no contexto angolano, quais as particularidades locais, que implicações práticas existem para a realidade angolana.
@@ -89,14 +90,18 @@ function buildSectionPrompt(
   
   const sectionWeights: Record<string, number> = {
     introducao: 0.15,
-    revisao_literatura: 0.35,
+    revisao_literatura: 0.30,
+    revisao_literatura_a: 0.16,
+    revisao_literatura_b: 0.14,
     metodologia: 0.15,
     resultados: 0.20,
     conclusao: 0.10,
     fundamentacao_teorica: 0.25,
     justificativa: 0.10,
   };
-  const expectedWords = Math.round(totalExpectedWords * (sectionWeights[sectionId] || 0.05));
+  // Cap expected words to avoid exceeding Edge Function compute limits
+  const rawExpected = Math.round(totalExpectedWords * (sectionWeights[sectionId] || 0.05));
+  const expectedWords = Math.min(rawExpected, 3500);
 
   const context = `
 DADOS DO PROJECTO:
@@ -304,30 +309,50 @@ ANTI-PLÁGIO: Cada subsecção deve conter análise original contextualizada par
 
     revisao_literatura: `${context}
 
-Gere o CAPÍTULO II – REVISÃO DA LITERATURA completo e extenso. Este é o capítulo mais importante:
+Gere o CAPÍTULO II – REVISÃO DA LITERATURA. Inclua as seguintes subsecções:
+
+2.1. Enquadramento Teórico (3-4 parágrafos) — situe o tema no quadro teórico, cite autores como Gil, Lakatos, Yin com análise crítica.
+
+2.2. Conceitos Fundamentais (2-3 parágrafos por conceito) — defina 3-4 conceitos-chave de "${topic}" com múltiplos autores.
+
+2.3. Estado da Arte (3-4 parágrafos) — investigações nacionais e internacionais, tendências e lacunas.
+
+2.4. Quadro Normativo em Angola (2 parágrafos) — legislação e políticas públicas relevantes.
+
+ANTI-PLÁGIO: Cada referência a autores deve ser seguida de análise própria contextualizada para Angola.`,
+
+    revisao_literatura_a: `${context}
+
+Gere a PRIMEIRA PARTE do CAPÍTULO II – REVISÃO DA LITERATURA. Escreva APENAS:
 
 2.1. Enquadramento Teórico (4-5 parágrafos)
-- Situar o tema no quadro teórico existente
-- Citar autores reconhecidos (Gil, Lakatos, Yin, etc.) com análise crítica das suas contribuições
+- Situar o tema "${topic}" no quadro teórico existente
+- Citar autores reconhecidos (Gil, Lakatos, Yin, etc.) com análise crítica
 - Demonstrar como as teorias se aplicam ao contexto angolano
 
 2.2. Conceitos Fundamentais (3-4 parágrafos por conceito)
-- Definir pelo menos 3-4 conceitos-chave relacionados com "${topic}"
+- Definir pelo menos 3-4 conceitos-chave de "${topic}"
 - Usar definições de múltiplos autores para cada conceito
 - Apresentar análise comparativa das definições
 
+ANTI-PLÁGIO: Cada referência a autores deve ser seguida de análise PRÓPRIA.`,
+
+    revisao_literatura_b: `${context}
+
+Gere a SEGUNDA PARTE do CAPÍTULO II – REVISÃO DA LITERATURA. A primeira parte (2.1 e 2.2) já foi escrita. Escreva APENAS:
+
 2.3. Estado da Arte / Estudos Anteriores (4-5 parágrafos)
-- Apresentar investigações relevantes nesta área (nacionais e internacionais)
-- Comparar criticamente abordagens metodológicas diferentes
-- Identificar tendências, convergências e lacunas na literatura
-- Contextualizar o que foi feito em Angola vs. internacionalmente
+- Investigações relevantes nacionais e internacionais
+- Comparar criticamente abordagens metodológicas
+- Identificar tendências, convergências e lacunas
+- Contextualizar Angola vs. panorama internacional
 
 2.4. Quadro Normativo e Legal em Angola (2-3 parágrafos)
 - Legislação angolana relevante para o tema
-- Referência à Constituição da República de Angola (2010) quando aplicável
-- Políticas públicas e regulamentos institucionais pertinentes
+- Constituição da República de Angola (2010)
+- Políticas públicas e regulamentos pertinentes
 
-ANTI-PLÁGIO OBRIGATÓRIO: Cada referência a autores deve ser seguida de análise PRÓPRIA. Use: "Na perspectiva de X (Ano), ... contudo, na realidade angolana, observa-se que..." Nunca copie — sintetize e analise criticamente.`,
+ANTI-PLÁGIO: Cada referência deve ser seguida de análise própria contextualizada para Angola.`,
 
     metodologia: `${context}
 
@@ -561,55 +586,69 @@ Deno.serve(async (req: Request) => {
 
     const sectionPrompt = buildSectionPrompt(sectionId, projectData);
 
-    // Use claude-3-5-sonnet for better quality academic content
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 8192,
-        temperature: 0.75,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: sectionPrompt }],
-      }),
-    });
+    // Section-specific token limits to stay within Edge Function compute budget
+    const SECTION_TOKEN_CAPS: Record<string, number> = {
+      revisao_literatura: 6000,
+      revisao_literatura_a: 6000,
+      revisao_literatura_b: 6000,
+      fundamentacao_teorica: 6000,
+      resultados: 6000,
+      introducao: 6000,
+      metodologia: 5000,
+      conclusao: 4000,
+      referencias: 4000,
+      justificativa: 4000,
+      cronograma: 3000,
+      orcamento: 3000,
+    };
+    const sectionTokenCap = SECTION_TOKEN_CAPS[sectionId] || 4096;
 
-    const payload = await anthropicRes.json().catch(() => ({}));
+    // Model fallback chain: try current models in order
+    const MODELS = [
+      { id: "claude-sonnet-4-6",  maxTokens: sectionTokenCap },
+      { id: "claude-haiku-4-5",   maxTokens: Math.min(sectionTokenCap, 8192) },
+    ];
 
-    if (!anthropicRes.ok) {
-      // Fallback to haiku if sonnet is unavailable
-      if (anthropicRes.status === 404 || anthropicRes.status === 400) {
-        const fallbackRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
-            max_tokens: 4096,
-            temperature: 0.75,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: "user", content: sectionPrompt }],
-          }),
-        });
-        const fallbackPayload = await fallbackRes.json().catch(() => ({}));
-        if (!fallbackRes.ok) {
-          const msg = fallbackPayload?.error?.message || `Erro da IA (HTTP ${fallbackRes.status})`;
-          return jsonError(msg, fallbackRes.status);
-        }
-        const text = fallbackPayload?.content?.[0]?.text || "";
-        return new Response(JSON.stringify({ text, sectionId }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    let payload: Record<string, unknown> = {};
+    let success = false;
+    let lastError = "";
+
+    for (const model of MODELS) {
+      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: model.id,
+          max_tokens: model.maxTokens,
+          temperature: 0.75,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: sectionPrompt }],
+        }),
+      });
+
+      payload = await anthropicRes.json().catch(() => ({}));
+
+      if (anthropicRes.ok) {
+        success = true;
+        break;
       }
-      const msg = payload?.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
-      return jsonError(msg, anthropicRes.status);
+
+      lastError = (payload as Record<string, any>)?.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
+
+      // For auth/rate-limit errors, stop immediately (no point trying other models)
+      if (anthropicRes.status === 401 || anthropicRes.status === 403 || anthropicRes.status === 429) {
+        return jsonError(lastError, anthropicRes.status);
+      }
+      // For 404/400 (model not found), try next model
+      // For 5xx (server error), also try next model
+    }
+
+    if (!success) {
+      return jsonError(lastError || "Nenhum modelo de IA disponível. Tente novamente mais tarde.", 502);
     }
 
     const text = payload?.content?.[0]?.text || "";

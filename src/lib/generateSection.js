@@ -4,30 +4,112 @@
  * Chama a Edge Function `generate-tcc-section` para gerar uma secção por vez.
  */
 import { supabase } from './supabase'
-import { invokeEdgeFunction } from './edgeFunctions'
+
+/**
+ * Extrai a mensagem de erro de um FunctionsError do Supabase.
+ * error.context é o Response object (não consumido) quando vem de FunctionsHttpError.
+ */
+export async function extractFnError(error) {
+  try {
+    const ctx = error?.context
+    // ctx pode ser um Response (FunctionsHttpError) ou um plain object
+    if (ctx && typeof ctx.json === 'function') {
+      const json = await ctx.json()
+      return json?.error || json?.message || error.message || 'Erro desconhecido'
+    }
+    // FunctionsFetchError / outros: context é um Error ou plain object
+    if (ctx && ctx.message) return ctx.message
+  } catch {}
+  return error?.message || 'Erro ao chamar a função Edge.'
+}
+
+/**
+ * Verifica se o JWT da sessão actual está prestes a expirar (< 60s)
+ * e faz refreshSession preventivamente para evitar 401.
+ */
+async function ensureFreshSession() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return null
+
+  // expires_at é unix timestamp (segundos)
+  const expiresAt = session.expires_at
+  const now = Math.floor(Date.now() / 1000)
+  if (expiresAt && expiresAt - now < 60) {
+    // Refresh preventivo — o token vai expirar em breve
+    const { data, error } = await supabase.auth.refreshSession()
+    if (!error && data?.session) return data.session
+  }
+
+  return session
+}
+
+/**
+ * Invoca uma Edge Function com retry automático após refresh de sessão em caso de
+ * erro de autenticação (401 / Invalid JWT).
+ */
+export async function callFunction(name, body) {
+  const session = await ensureFreshSession()
+  if (!session) {
+    throw new Error('Inicia sessão para usar a geração com IA.')
+  }
+
+  let { data, error } = await supabase.functions.invoke(name, { body })
+
+  // Se recebemos 401 (JWT inválido / expirado), tentamos refresh da sessão e repetimos
+  const status = error?.context?.status
+  if (error && (status === 401 || status === 403)) {
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (!refreshError) {
+      const retried = await supabase.functions.invoke(name, { body });
+      ({ data, error } = retried)
+    }
+  }
+
+  if (error) {
+    const msg = await extractFnError(error)
+    throw new Error(msg)
+  }
+
+  return data
+}
+
+/**
+ * Secções que são divididas em sub-chamadas para evitar
+ * exceder os limites de recursos da Edge Function do Supabase.
+ * Chave = sectionId original, Valor = lista de sub-IDs a gerar e concatenar.
+ */
+const SPLIT_SECTIONS = {
+  revisao_literatura: ['revisao_literatura_a', 'revisao_literatura_b'],
+}
 
 /**
  * Gera uma secção do TCC usando IA.
+ * Secções muito grandes (ex: revisao_literatura) são automaticamente divididas
+ * em sub-chamadas mais leves para respeitar os limites de compute do Supabase.
  *
  * @param {string} sectionId  – ID da secção (ex: 'introducao', 'metodologia')
  * @param {object} projectData – Dados do projecto (title, topic, course, etc.)
  * @returns {Promise<string>}  – Texto gerado pela IA
  */
 export async function generateSection(sectionId, projectData) {
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
-  if (!token) {
-    throw new Error('Inicia sessão para usar a geração com IA.')
+  const subParts = SPLIT_SECTIONS[sectionId]
+
+  if (subParts) {
+    // Gera cada sub-parte sequencialmente e concatena
+    const parts = []
+    for (const subId of subParts) {
+      const data = await callFunction('generate-tcc-section', { sectionId: subId, projectData })
+      if (data?.text) {
+        parts.push(data.text)
+      }
+    }
+    if (parts.length === 0) {
+      throw new Error('Resposta vazia da IA. Tente novamente.')
+    }
+    return parts.join('\n\n')
   }
 
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-
-  const data = await invokeEdgeFunction(
-    'generate-tcc-section',
-    { sectionId, projectData },
-    token,
-    anonKey,
-  )
+  const data = await callFunction('generate-tcc-section', { sectionId, projectData })
 
   if (!data?.text) {
     throw new Error('Resposta vazia da IA. Tente novamente.')
@@ -44,20 +126,7 @@ export async function generateSection(sectionId, projectData) {
  * @returns {Promise<string>}  – Texto humanizado
  */
 export async function humanizeSection(sectionId, textToHumanize) {
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
-  if (!token) {
-    throw new Error('Inicia sessão para usar a humanização.')
-  }
-
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-
-  const data = await invokeEdgeFunction(
-    'humanize-tcc-content',
-    { sectionId, textToHumanize },
-    token,
-    anonKey,
-  )
+  const data = await callFunction('humanize-tcc-content', { sectionId, textToHumanize })
 
   if (!data?.text) {
     throw new Error('Resposta vazia da IA. Tente novamente.')
@@ -119,13 +188,27 @@ export function traduzirErroIA(detail) {
     return 'Saldo/quota insuficiente na conta da IA. Verifique a facturação da Anthropic.'
   }
   if (normalized.includes('model') && normalized.includes('not found')) {
-    return 'Modelo da IA indisponível. Verifique o modelo na Edge Function.'
+    return 'Modelo da IA indisponível ou descontinuado. Verifique o modelo na Edge Function.'
+  }
+  if (normalized.includes('retired') || normalized.includes('deprecated') || normalized.includes('decommissioned')) {
+    return 'Modelo da IA foi descontinuado pela Anthropic. Actualize o modelo na Edge Function.'
   }
   if (normalized.includes('rate limit') || normalized.includes('too many requests')) {
     return 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.'
   }
   if (normalized.includes('overloaded') || normalized.includes('529')) {
     return 'O servidor da IA está sobrecarregado. Tente novamente em alguns minutos.'
+  }
+  if (normalized.includes('compute resources') || normalized.includes('boot deadline') || normalized.includes('resource limit')) {
+    return 'A secção excedeu o limite de recursos do servidor. Tente regenerar a secção individualmente.'
+  }
+  if (
+    normalized.includes('invalid jwt') ||
+    normalized.includes('jwt expired') ||
+    normalized.includes('invalid compact jws') ||
+    normalized.includes('pgrst301')
+  ) {
+    return 'Sessão expirada ou inválida. Termina sessão (logout) e inicia sessão novamente.'
   }
   if (normalized.includes('não autenticado') || normalized.includes('sessão')) {
     return message

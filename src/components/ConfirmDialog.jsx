@@ -114,7 +114,7 @@ export default function ConfirmDialog({
             <button
               onClick={onCancel}
               disabled={loading}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-dark-400 hover:text-white hover:bg-white/5 transition-all"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-all"
               aria-label="Fechar"
             >
               <X className="w-4 h-4" />
@@ -127,7 +127,7 @@ export default function ConfirmDialog({
               </div>
               <h3
                 id="confirm-dialog-title"
-                className="text-xl font-display font-bold text-white leading-tight"
+                className="text-xl font-display font-bold text-slate-900 leading-tight"
               >
                 {title}
               </h3>
@@ -137,7 +137,7 @@ export default function ConfirmDialog({
             {message && (
               <p
                 id="confirm-dialog-desc"
-                className="text-dark-300 mb-3 leading-relaxed"
+                className="text-slate-500 mb-3 leading-relaxed"
               >
                 {message}
               </p>
@@ -158,7 +158,7 @@ export default function ConfirmDialog({
               <button
                 onClick={onCancel}
                 disabled={loading}
-                className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-dark-300 hover:text-white hover:border-white/20 transition-all text-sm font-medium"
+                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-200 transition-all text-sm font-medium"
               >
                 {cancelLabel}
               </button>

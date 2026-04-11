@@ -9,13 +9,12 @@ import {
   Shield,
   GraduationCap,
   ArrowRight,
-  Star,
   CheckCircle2,
   ChevronRight,
 } from 'lucide-react'
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 24 },
   visible: (i = 0) => ({
     opacity: 1,
     y: 0,
@@ -69,12 +68,12 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <GraduationCap className="w-8 h-8 text-primary-400" />
-            <span className="text-xl font-display font-bold gradient-text">AngolaTCC AI</span>
+          <Link to="/" className="flex items-center gap-2.5">
+            <GraduationCap className="w-8 h-8 text-indigo-600" />
+            <span className="text-xl font-display font-bold text-indigo-700">AngolaTCC AI</span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-dark-300 hover:text-white transition-colors font-medium">
+            <Link to="/login" className="text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm">
               Entrar
             </Link>
             <Link to="/register" className="btn-primary text-sm px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
@@ -86,9 +85,8 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-6 relative overflow-hidden">
-        {/* Decorative orbs */}
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-accent-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-indigo-100/60 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-blue-100/40 rounded-full blur-3xl animate-float" style={{ animationDelay: '4s' }} />
 
         <div className="max-w-5xl mx-auto text-center relative">
           <motion.div
@@ -96,7 +94,7 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={0}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-300 text-sm font-medium mb-8"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-sm font-medium mb-8"
           >
             <Sparkles className="w-4 h-4" />
             Inteligência Artificial para o seu TCC
@@ -107,9 +105,9 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={1}
-            className="text-5xl md:text-7xl font-display font-extrabold leading-tight mb-6"
+            className="text-5xl md:text-7xl font-display font-extrabold leading-tight mb-6 text-slate-900"
           >
-            Gere o seu <span className="gradient-text">TCC completo</span> com Inteligência Artificial
+            Gere o seu <span className="text-indigo-600">TCC completo</span> com Inteligência Artificial
           </motion.h1>
 
           <motion.p
@@ -117,7 +115,7 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={2}
-            className="text-xl text-dark-400 max-w-2xl mx-auto mb-10 leading-relaxed"
+            className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed"
           >
             A plataforma mais avançada de Angola para geração automática de Trabalhos de Conclusão de Curso.
             Introduza o tema e receba um TCC formatado e pronto para revisão.
@@ -132,7 +130,7 @@ export default function LandingPage() {
           >
             <Link
               to="/register"
-              className="btn-primary text-lg px-8 py-4 rounded-xl inline-flex items-center justify-center gap-2 animate-pulse-glow"
+              className="btn-primary text-lg px-8 py-4 rounded-xl inline-flex items-center justify-center gap-2"
             >
               <Sparkles className="w-5 h-5" />
               Gerar TCC Agora
@@ -159,8 +157,8 @@ export default function LandingPage() {
               { value: '98%', label: 'Satisfação' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-3xl font-display font-bold gradient-text">{stat.value}</div>
-                <div className="text-sm text-dark-400 mt-1">{stat.label}</div>
+                <div className="text-3xl font-display font-bold text-indigo-600">{stat.value}</div>
+                <div className="text-sm text-slate-500 mt-1">{stat.label}</div>
               </div>
             ))}
           </motion.div>
@@ -177,10 +175,10 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-display font-bold mb-4">
-              Funcionalidades <span className="gradient-text">Poderosas</span>
+            <h2 className="text-4xl font-display font-bold mb-4 text-slate-900">
+              Funcionalidades <span className="text-indigo-600">Poderosas</span>
             </h2>
-            <p className="text-dark-400 text-lg max-w-xl mx-auto">
+            <p className="text-slate-500 text-lg max-w-xl mx-auto">
               Tudo o que precisa para criar o seu TCC de forma rápida e profissional.
             </p>
           </motion.div>
@@ -196,11 +194,11 @@ export default function LandingPage() {
                 custom={i}
                 className="glass-card rounded-2xl p-6"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center mb-4">
-                  <feature.icon className="w-6 h-6 text-primary-400" />
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center mb-4">
+                  <feature.icon className="w-6 h-6 text-indigo-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-dark-400 text-sm leading-relaxed">{feature.description}</p>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">{feature.title}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">{feature.description}</p>
               </motion.div>
             ))}
           </div>
@@ -217,10 +215,10 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-display font-bold mb-4">
-              Como <span className="gradient-text">Funciona</span>
+            <h2 className="text-4xl font-display font-bold mb-4 text-slate-900">
+              Como <span className="text-indigo-600">Funciona</span>
             </h2>
-            <p className="text-dark-400 text-lg max-w-xl mx-auto">
+            <p className="text-slate-500 text-lg max-w-xl mx-auto">
               Quatro passos simples para ter o seu TCC pronto.
             </p>
           </motion.div>
@@ -236,11 +234,11 @@ export default function LandingPage() {
                 custom={i}
                 className="glass-card rounded-2xl p-6 text-center relative"
               >
-                <div className="text-5xl font-display font-extrabold gradient-text opacity-30 mb-2">
+                <div className="text-5xl font-display font-extrabold text-indigo-100 mb-2">
                   {step.num}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
-                <p className="text-dark-400 text-sm">{step.desc}</p>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">{step.title}</h3>
+                <p className="text-slate-500 text-sm">{step.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -257,10 +255,10 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-center mb-12"
           >
-            <h2 className="text-4xl font-display font-bold mb-4">
-              Secções <span className="gradient-text">Geradas</span>
+            <h2 className="text-4xl font-display font-bold mb-4 text-slate-900">
+              Secções <span className="text-indigo-600">Geradas</span>
             </h2>
-            <p className="text-dark-400 text-lg">
+            <p className="text-slate-500 text-lg">
               O nosso motor de IA gera todas as secções de um TCC completo.
             </p>
           </motion.div>
@@ -290,8 +288,8 @@ export default function LandingPage() {
                 'Referências Bibliográficas',
               ].map((section) => (
                 <div key={section} className="flex items-center gap-3 py-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
-                  <span className="text-dark-200 text-sm">{section}</span>
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  <span className="text-slate-700 text-sm">{section}</span>
                 </div>
               ))}
             </div>
@@ -306,13 +304,15 @@ export default function LandingPage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="max-w-3xl mx-auto text-center glass-card rounded-3xl p-12"
+          className="max-w-3xl mx-auto text-center glass-card rounded-3xl p-12 bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-100"
         >
-          <Star className="w-10 h-10 text-yellow-400 mx-auto mb-4" />
-          <h2 className="text-3xl font-display font-bold mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center mx-auto mb-6">
+            <GraduationCap className="w-7 h-7 text-indigo-600" />
+          </div>
+          <h2 className="text-3xl font-display font-bold mb-4 text-slate-900">
             Pronto para criar o seu TCC?
           </h2>
-          <p className="text-dark-400 mb-8 text-lg">
+          <p className="text-slate-500 mb-8 text-lg">
             Junte-se a centenas de estudantes angolanos que já utilizam a AngolaTCC AI.
           </p>
           <Link
@@ -326,14 +326,14 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-10 px-6 border-t border-white/5">
+      <footer className="py-10 px-6 border-t border-slate-200">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-primary-400" />
-            <span className="font-display font-bold gradient-text">AngolaTCC AI</span>
+            <GraduationCap className="w-6 h-6 text-indigo-600" />
+            <span className="font-display font-bold text-indigo-700">AngolaTCC AI</span>
           </div>
-          <p className="text-dark-500 text-sm">
-            © 2025 AngolaTCC AI. Todos os direitos reservados.
+          <p className="text-slate-400 text-sm">
+            © {new Date().getFullYear()} AngolaTCC AI. Todos os direitos reservados.
           </p>
         </div>
       </footer>

@@ -168,10 +168,10 @@ function ChartBlock({ jsonStr, onTypeChange }) {
   }
 
   return (
-    <div className="my-6 space-y-3 p-4 rounded-2xl border border-white/10 bg-white/[0.02]">
+    <div className="my-6 space-y-3 p-4 rounded-2xl border border-slate-200 bg-white/[0.02]">
       {/* Selector de tipo */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium text-dark-500 shrink-0">Tipo de gráfico:</span>
+        <span className="text-xs font-medium text-slate-400 shrink-0">Tipo de gráfico:</span>
         <div className="flex items-center gap-1.5 flex-wrap">
           {CHART_TYPES.map(t => (
             <button
@@ -179,8 +179,8 @@ function ChartBlock({ jsonStr, onTypeChange }) {
               onClick={() => handleTypeChange(t.id)}
               className={`text-xs px-2.5 py-1 rounded-lg border transition-all font-medium ${
                 currentType === t.id
-                  ? 'bg-primary-500/25 border-primary-500/40 text-primary-300'
-                  : 'bg-white/[0.03] border-white/10 text-dark-400 hover:border-white/25 hover:text-dark-200'
+                  ? 'bg-indigo-600/25 border-primary-500/40 text-blue-500'
+                  : 'bg-white/[0.03] border-slate-200 text-slate-500 hover:border-white/25 hover:text-slate-700'
               }`}
             >
               {t.label}
@@ -192,18 +192,18 @@ function ChartBlock({ jsonStr, onTypeChange }) {
       {/* Imagem do gráfico */}
       <div className="flex flex-col items-center gap-2">
         {imgFailed ? (
-          <div className="w-full h-32 rounded-xl bg-dark-800 border border-white/10 flex items-center justify-center">
-            <p className="text-dark-500 text-sm">Erro ao carregar gráfico — verifique a ligação à internet</p>
+          <div className="w-full h-32 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center">
+            <p className="text-slate-400 text-sm">Erro ao carregar gráfico — verifique a ligação à internet</p>
           </div>
         ) : (
           <img
             src={chartUrl}
             alt="Gráfico de Análise"
-            className="max-w-full rounded-xl border border-white/10 shadow-md bg-white"
+            className="max-w-full rounded-xl border border-slate-200 shadow-md bg-white"
             onError={() => setImgFailed(true)}
           />
         )}
-        <p className="text-xs text-dark-500 italic">
+        <p className="text-xs text-slate-400 italic">
           Gráfico automático · Altere o tipo acima · Exporta embutido no Word
         </p>
       </div>
@@ -228,19 +228,19 @@ function MarkdownTablePreview({ lines }) {
   if (rows.length === 0) return null
 
   return (
-    <div className="overflow-x-auto my-5 rounded-xl border border-white/10 shadow-inner">
+    <div className="overflow-x-auto my-5 rounded-xl border border-slate-200 shadow-inner">
       <table className="w-full text-sm">
         <tbody>
           {rows.map((row, i) => (
             <tr
               key={i}
               className={row.header
-                ? 'bg-primary-500/20 font-semibold text-white text-center'
-                : 'border-t border-white/5 text-dark-300 hover:bg-white/[0.02]'
+                ? 'bg-indigo-600/20 font-semibold text-slate-900 text-center'
+                : 'border-t border-slate-200 text-slate-500 hover:bg-white/[0.02]'
               }
             >
               {row.cols.map((col, j) => (
-                <td key={j} className="px-4 py-2 border-r border-white/10 last:border-r-0 whitespace-nowrap">
+                <td key={j} className="px-4 py-2 border-r border-slate-200 last:border-r-0 whitespace-nowrap">
                   {col}
                 </td>
               ))}
@@ -307,10 +307,10 @@ function parseSectionContent(content, onChartTypeChange) {
             <img
               src={url}
               alt="Diagrama"
-              className="max-w-full rounded-xl border border-white/10 shadow-lg"
+              className="max-w-full rounded-xl border border-slate-200 shadow-lg"
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
-            <p className="text-xs text-dark-500 italic">Diagrama</p>
+            <p className="text-xs text-slate-400 italic">Diagrama</p>
           </div>
         )
       } catch {
@@ -341,7 +341,7 @@ function parseSectionContent(content, onChartTypeChange) {
     // Legenda de figura/tabela
     if (/^\*\*(Figura|Tabela|Gráfico)\s*\d+/i.test(trimmed)) {
       elements.push(
-        <p key={`cap-${i}`} className="text-center text-xs text-dark-400 italic my-1">
+        <p key={`cap-${i}`} className="text-center text-xs text-slate-500 italic my-1">
           {trimmed.replace(/\*\*/g, '')}
         </p>
       )
@@ -365,7 +365,7 @@ function parseSectionContent(content, onChartTypeChange) {
     // Bullet points
     if (trimmed.startsWith('•') || trimmed.startsWith('- ')) {
       elements.push(
-        <p key={`b-${i}`} className="pl-4 text-dark-300 my-0.5">{line}</p>
+        <p key={`b-${i}`} className="pl-4 text-slate-500 my-0.5">{line}</p>
       )
       i++
       continue
@@ -373,7 +373,7 @@ function parseSectionContent(content, onChartTypeChange) {
 
     // Texto normal
     elements.push(
-      <p key={`p-${i}`} className="text-dark-300 leading-relaxed my-1">{line}</p>
+      <p key={`p-${i}`} className="text-slate-500 leading-relaxed my-1">{line}</p>
     )
     i++
   }
@@ -437,11 +437,14 @@ export default function ProjectEditor() {
     setProject(data)
     setLoading(false)
 
-    // Se o projecto acabou de ser criado, gerar automaticamente
-    if (
-      data.status === 'generating' &&
-      (!data.sections || Object.keys(data.sections).length === 0)
-    ) {
+    // Gerar automaticamente se nenhuma secção de conteúdo foi gerada ainda
+    const projectType = data.sections?.projectType || 'tcc'
+    const expectedSections = getSectionsForProject(projectType)
+    const hasAnyContent = expectedSections.some(
+      (s) => data.sections?.[s.id] && typeof data.sections[s.id] === 'string' && data.sections[s.id].trim().length > 0
+    )
+
+    if (!hasAnyContent) {
       generateTCC(data)
     }
   }, [id, user.id, navigate])
@@ -480,6 +483,10 @@ export default function ProjectEditor() {
         setGenerationErrors((prev) => ({ ...prev, [sectionId]: translated }))
         setGenerationProgress((prev) => ({ ...prev, done: index + 1 }))
         console.error(`Erro ao gerar "${sectionId}":`, errorMsg)
+        // Mostra o primeiro erro como toast para diagnóstico imediato
+        if (index === 0) {
+          toast.error(`Erro: ${translated}`, { duration: 8000 })
+        }
       }
     )
 
@@ -702,7 +709,7 @@ export default function ProjectEditor() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="loading-spinner w-10 h-10 border-4 mx-auto mb-4" />
-          <p className="text-dark-400">A carregar projecto...</p>
+          <p className="text-slate-500">A carregar projecto...</p>
         </div>
       </div>
     )
@@ -723,16 +730,16 @@ export default function ProjectEditor() {
           <div className="flex items-center gap-3">
             <Link
               to="/dashboard"
-              className="flex items-center gap-2 text-dark-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div className="h-5 w-px bg-white/10" />
+            <div className="h-5 w-px bg-slate-100" />
             <h1 className="text-sm font-semibold truncate max-w-[200px] sm:max-w-xs">
               {project?.title || 'TCC sem título'}
             </h1>
             {generating && (
-              <span className="text-xs text-primary-400 flex items-center gap-1.5 ml-2">
+              <span className="text-xs text-indigo-600 flex items-center gap-1.5 ml-2">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 {generationProgress.done}/{generationProgress.total}
               </span>
@@ -790,18 +797,18 @@ export default function ProjectEditor() {
       <div className="flex flex-1 pt-14">
         {/* Sidebar */}
         <aside
-          className={`glass border-r border-white/5 transition-all duration-300 flex-shrink-0 ${
+          className={`glass border-r border-slate-200 transition-all duration-300 flex-shrink-0 ${
             sidebarOpen ? 'w-64' : 'w-0 overflow-hidden'
           }`}
         >
           <div className="p-4 sticky top-14">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-semibold text-dark-400 uppercase tracking-wider">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Secções
               </h2>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="text-dark-500 hover:text-dark-300 sm:hidden"
+                className="text-slate-400 hover:text-slate-500 sm:hidden"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -818,15 +825,15 @@ export default function ProjectEditor() {
                     onClick={() => setActiveSection(section.id)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-left ${
                       activeSection === section.id
-                        ? 'bg-primary-500/15 text-primary-400 font-medium'
-                        : 'text-dark-400 hover:text-dark-200 hover:bg-white/5'
+                        ? 'bg-indigo-100 text-indigo-600 font-medium'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate flex-1">{section.title}</span>
                     {/* Indicadores de estado */}
                     {isThisGenerating && (
-                      <Loader2 className="w-3 h-3 animate-spin text-primary-400 ml-auto" />
+                      <Loader2 className="w-3 h-3 animate-spin text-indigo-600 ml-auto" />
                     )}
                     {!isThisGenerating && hasError && (
                       <AlertCircle className="w-3 h-3 text-red-400 ml-auto" />
@@ -841,20 +848,20 @@ export default function ProjectEditor() {
 
             {/* Progresso geral */}
             {generating && (
-              <div className="mt-6 p-3 rounded-lg bg-primary-500/5 border border-primary-500/10">
+              <div className="mt-6 p-3 rounded-lg bg-indigo-50 border border-indigo-200">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-primary-400 animate-pulse" />
-                  <span className="text-xs text-primary-300 font-medium">A gerar com IA...</span>
+                  <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                  <span className="text-xs text-indigo-500 font-medium">A gerar com IA...</span>
                 </div>
-                <div className="w-full h-1.5 bg-dark-800 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary-500 to-primary-400 rounded-full transition-all duration-500"
+                    className="h-full bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-full transition-all duration-500"
                     style={{
                       width: `${(generationProgress.done / Math.max(generationProgress.total, 1)) * 100}%`,
                     }}
                   />
                 </div>
-                <p className="text-xs text-dark-500 mt-1.5">
+                <p className="text-xs text-slate-400 mt-1.5">
                   {generationProgress.done} de {generationProgress.total} secções
                 </p>
               </div>
@@ -866,7 +873,7 @@ export default function ProjectEditor() {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="fixed left-2 top-20 z-40 bg-dark-800 border border-white/10 rounded-lg p-2 text-dark-400 hover:text-white transition-colors"
+            className="fixed left-2 top-20 z-40 bg-slate-100 border border-slate-200 rounded-lg p-2 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -882,17 +889,17 @@ export default function ProjectEditor() {
                 animate={{ opacity: 1 }}
                 className="space-y-4"
               >
-                <div className="w-16 h-16 rounded-full bg-primary-500/10 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-8 h-8 text-primary-400 animate-pulse" />
+                <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mx-auto">
+                  <Sparkles className="w-8 h-8 text-indigo-600 animate-pulse" />
                 </div>
                 <h2 className="text-xl font-semibold">
                   A gerar «{activeSectionData?.title}» com IA...
                 </h2>
-                <p className="text-dark-400 text-sm">
+                <p className="text-slate-500 text-sm">
                   O Claude Sonnet está a criar conteúdo académico de qualidade. Isto pode demorar
                   15-30 segundos por secção.
                 </p>
-                <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary-400" />
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600" />
               </motion.div>
             </div>
           ) : (
@@ -909,7 +916,7 @@ export default function ProjectEditor() {
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                   <h2 className="text-2xl font-display font-bold flex items-center gap-3">
                     {activeSectionData && (
-                      <activeSectionData.icon className="w-6 h-6 text-primary-400" />
+                      <activeSectionData.icon className="w-6 h-6 text-indigo-600" />
                     )}
                     {activeSectionData?.title}
                   </h2>
@@ -931,7 +938,7 @@ export default function ProjectEditor() {
                       <button
                         onClick={() => handleHumanize(activeSection)}
                         disabled={generating || isSectionGenerating || humanizingSection === activeSection}
-                        className="btn-secondary text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 border-primary-500/30 text-primary-300 hover:text-primary-100 hover:bg-primary-500/10"
+                        className="btn-secondary text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 border-indigo-200 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50"
                         title="Reescreve o texto tirando marcas robóticas da IA"
                       >
                         {humanizingSection === activeSection ? (
@@ -999,17 +1006,17 @@ export default function ProjectEditor() {
                     ref={textareaRef}
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full min-h-[600px] bg-dark-900/50 border border-white/10 rounded-xl p-6 text-dark-200 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-primary-500/40 font-mono"
+                    className="w-full min-h-[600px] bg-slate-50 border border-slate-200 rounded-xl p-6 text-slate-700 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"
                   />
                 ) : (
                   <div className="glass-card rounded-2xl p-6 sm:p-8">
-                    <div className="prose prose-invert prose-sm max-w-none">
+                    <div className="prose prose-slate prose-sm max-w-none prose-headings:text-slate-900 prose-headings:font-extrabold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-p:text-slate-700 prose-a:text-indigo-600 prose-strong:text-slate-900 prose-strong:font-bold">
                       {sectionContent ? (
                         parseSectionContent(sectionContent, handleChartTypeChange)
                       ) : (
                         <div className="text-center py-12">
-                          <Sparkles className="w-10 h-10 text-dark-600 mx-auto mb-3" />
-                          <p className="text-dark-500 italic mb-3">
+                          <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                          <p className="text-slate-400 italic mb-3">
                             Conteúdo ainda não gerado para esta secção.
                           </p>
                           <button
