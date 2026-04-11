@@ -236,7 +236,7 @@ function MarkdownTablePreview({ lines }) {
               key={i}
               className={row.header
                 ? 'bg-indigo-600/20 font-semibold text-slate-900 text-center'
-                : 'border-t border-slate-200 text-slate-500 hover:bg-white/[0.02]'
+                : 'border-t border-slate-200 text-slate-800 hover:bg-white/[0.02]'
               }
             >
               {row.cols.map((col, j) => (
@@ -341,7 +341,7 @@ function parseSectionContent(content, onChartTypeChange) {
     // Legenda de figura/tabela
     if (/^\*\*(Figura|Tabela|Gráfico)\s*\d+/i.test(trimmed)) {
       elements.push(
-        <p key={`cap-${i}`} className="text-center text-xs text-slate-500 italic my-1">
+        <p key={`cap-${i}`} className="text-center text-sm text-slate-700 italic my-1">
           {trimmed.replace(/\*\*/g, '')}
         </p>
       )
@@ -356,7 +356,7 @@ function parseSectionContent(content, onChartTypeChange) {
       (line.trim() === line.trim().toUpperCase() && line.trim().length > 3 && /[A-ZÀ-Ü]/.test(line))
     ) {
       elements.push(
-        <p key={`h-${i}`} className="font-bold text-dark-100 mt-4 mb-1">{line}</p>
+        <p key={`h-${i}`} className="font-bold text-slate-900 text-lg mt-5 mb-2">{line}</p>
       )
       i++
       continue
@@ -365,7 +365,7 @@ function parseSectionContent(content, onChartTypeChange) {
     // Bullet points
     if (trimmed.startsWith('•') || trimmed.startsWith('- ')) {
       elements.push(
-        <p key={`b-${i}`} className="pl-4 text-slate-500 my-0.5">{line}</p>
+        <p key={`b-${i}`} className="pl-4 text-slate-800 my-0.5">{line}</p>
       )
       i++
       continue
@@ -373,7 +373,7 @@ function parseSectionContent(content, onChartTypeChange) {
 
     // Texto normal
     elements.push(
-      <p key={`p-${i}`} className="text-slate-500 leading-relaxed my-1">{line}</p>
+      <p key={`p-${i}`} className="text-slate-800 leading-relaxed my-1">{line}</p>
     )
     i++
   }

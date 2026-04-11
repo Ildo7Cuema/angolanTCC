@@ -89,7 +89,7 @@ function createMarkdownTable(lines) {
             : undefined,
           borders: CELL_BORDERS,
           children: [new Paragraph({
-            children: [new TextRun({ text: c, font: FONT, size: 20, bold: isHeaderRow })],
+            children: [new TextRun({ text: c, font: FONT, size: 20, bold: isHeaderRow, color: '000000' })],
             alignment: isHeaderRow ? AlignmentType.CENTER : AlignmentType.LEFT,
             spacing: { before: 80, after: 80 }
           })],
@@ -372,6 +372,7 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
             font: FONT,
             size: FONT_SIZE_TITLE,
             bold: true,
+            color: '000000',
           }),
         ],
         alignment: AlignmentType.CENTER,
@@ -505,7 +506,7 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     // ── Legenda de figura/tabela (ex: **Figura 1:** ou **Tabela 2:**) ──────
     if (/^\*\*(Figura|Tabela|Gráfico)\s*\d+/i.test(line)) {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line.replace(/\*\*/g, ''), font: FONT, size: 20, bold: true, italics: true })],
+        children: [new TextRun({ text: line.replace(/\*\*/g, ''), font: FONT, size: 20, bold: true, italics: true, color: '000000' })],
         alignment: AlignmentType.CENTER,
         spacing: { before: 60, after: 200 }
       }))
@@ -525,20 +526,20 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     const heading = detectHeading(line)
     if (heading === 'chapter' || heading === 'upper') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_TITLE, bold: true })],
+        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_TITLE, bold: true, color: '000000' })],
         alignment: AlignmentType.LEFT,
         spacing: { line: LINE_SPACING, before: 360, after: 200 },
         heading: HeadingLevel.HEADING_1,
       }))
     } else if (heading === 'sub1') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_HEADING, bold: true })],
+        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_HEADING, bold: true, color: '000000' })],
         spacing: { line: LINE_SPACING, before: 240, after: 120 },
         heading: HeadingLevel.HEADING_2,
       }))
     } else if (heading === 'sub2' || heading === 'sub3') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE, bold: true, italics: heading === 'sub3' })],
+        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE, bold: true, italics: heading === 'sub3', color: '000000' })],
         spacing: { line: LINE_SPACING, before: 200, after: 100 },
         heading: HeadingLevel.HEADING_3,
       }))
@@ -649,7 +650,7 @@ export async function exportToDocx(project, sections) {
     styles: {
       default: {
         document: {
-          run: { font: FONT, size: FONT_SIZE },
+          run: { font: FONT, size: FONT_SIZE, color: '000000' },
           paragraph: {
             spacing: { line: LINE_SPACING },
             alignment: AlignmentType.JUSTIFIED,
