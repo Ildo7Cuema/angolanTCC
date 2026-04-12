@@ -70,7 +70,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <GraduationCap className="w-8 h-8 text-indigo-600" />
-            <span className="text-xl font-display font-bold text-indigo-700">AngolaTCC AI</span>
+            <span className="text-xl font-display font-bold text-indigo-700">AngolaTCC IA</span>
           </Link>
           <div className="flex items-center gap-4">
             <Link to="/login" className="text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm">
@@ -107,7 +107,7 @@ export default function LandingPage() {
             custom={1}
             className="text-5xl md:text-7xl font-display font-extrabold leading-tight mb-6 text-slate-900"
           >
-            Gere o seu <span className="text-indigo-600">TCC completo</span> com Inteligência Artificial
+            Gere o seu <span className="text-indigo-600">TCC completo</span> com AngolaTCC IA
           </motion.h1>
 
           <motion.p
@@ -330,10 +330,10 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <GraduationCap className="w-6 h-6 text-indigo-600" />
-            <span className="font-display font-bold text-indigo-700">AngolaTCC AI</span>
+            <span className="font-display font-bold text-indigo-700">AngolaTCC IA</span>
           </div>
           <p className="text-slate-400 text-sm">
-            © {new Date().getFullYear()} AngolaTCC AI. Todos os direitos reservados.
+            © {new Date().getFullYear()} AngolaTCC IA. Todos os direitos reservados.
           </p>
         </div>
       </footer>
