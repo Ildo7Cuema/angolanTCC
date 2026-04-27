@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES auth.users(id) NOT NULL,
   project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
-  amount numeric DEFAULT 55000 NOT NULL,
+  amount numeric DEFAULT 35000 NOT NULL,
   reference_code text UNIQUE NOT NULL,
   status text DEFAULT 'pendente' CHECK (status IN ('pendente', 'pago', 'rejeitado')),
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL

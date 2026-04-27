@@ -154,7 +154,7 @@ export default function Dashboard() {
     const { error: payErr } = await supabase.from('payments').insert({
       user_id: user.id,
       project_id: newProject.id,
-      amount: 55000,
+      amount: 35000,
       reference_code: refCode,
       status: 'pendente',
     })
@@ -396,7 +396,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-start gap-2 pt-1 border-t border-slate-200">
                   <span className="text-amber-600">
-                    Será necessário efectuar o pagamento de <strong>55.000 AOA</strong> para o TCC.
+                    Será necessário efectuar o pagamento de <strong>35.000 AOA</strong> para o TCC.
                   </span>
                 </div>
               </div>

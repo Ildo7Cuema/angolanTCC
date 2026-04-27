@@ -529,7 +529,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
     }
 
     const refCode = (form.projectType === 'anteprojecto' ? 'AP-' : 'TCC-') + Math.random().toString(36).substring(2, 7).toUpperCase()
-    const paymentAmount = form.projectType === 'anteprojecto' ? 25000 : 55000
+    const paymentAmount = form.projectType === 'anteprojecto' ? 15000 : 35000
     
     const { error: payErr } = await supabase.from('payments').insert({
       user_id: user.id,
@@ -592,7 +592,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                       <span className="font-semibold text-sm">TCC / Monografia</span>
                     </div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${form.projectType === 'tcc' ? 'bg-indigo-600/20 text-blue-500' : 'bg-slate-100 text-slate-500'}`}>
-                      55.000 AOA
+                      35.000 AOA
                     </span>
                   </div>
                   <p className="text-xs opacity-70">
@@ -618,7 +618,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                       <span className="font-semibold text-sm">Ante-Projecto</span>
                     </div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${form.projectType === 'anteprojecto' ? 'bg-indigo-600/20 text-indigo-500' : 'bg-slate-100 text-slate-500'}`}>
-                      25.000 AOA
+                      15.000 AOA
                     </span>
                   </div>
                   <p className="text-xs opacity-70">
@@ -1013,7 +1013,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                       value={form.studentName}
                       onChange={(e) => updateField('studentName', e.target.value)}
                       className="input-field pl-10"
-                      placeholder="Seu nome"
+                      placeholder="O seu nome"
                     />
                   </div>
                 </div>
@@ -1094,7 +1094,7 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                   <Sparkles className="w-5 h-5" />
                   {form.projectType === 'anteprojecto' ? 'Criar Ante-Projecto' : 'Criar TCC'}
                   <span className="ml-1 text-sm font-normal opacity-80">
-                    — {form.projectType === 'anteprojecto' ? '25.000 AOA' : '55.000 AOA'}
+                    — {form.projectType === 'anteprojecto' ? '15.000 AOA' : '35.000 AOA'}
                   </span>
                 </>
               )}

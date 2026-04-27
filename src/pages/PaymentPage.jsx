@@ -151,7 +151,7 @@ export default function PaymentPage() {
                 </span>
               </div>
               <p className="text-3xl font-display font-bold text-slate-900 tracking-tight">
-                {formatCurrency(payment?.amount || 55000)}
+                {formatCurrency(payment?.amount || 35000)}
               </p>
             </div>
 
