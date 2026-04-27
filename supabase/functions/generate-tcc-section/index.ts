@@ -35,7 +35,17 @@ REGRAS ANTI-PLÁGIO — ORIGINALIDADE GARANTIDA:
 15. Combine MÚLTIPLAS perspectivas teóricas para criar sínteses originais — isto é o que diferencia um bom académico.
 16. Inclua SEMPRE contextualização para Angola: como o fenómeno se manifesta especificamente no contexto angolano, quais as particularidades locais, que implicações práticas existem para a realidade angolana.
 17. Use terminologia variada para os mesmos conceitos (sinónimos académicos) — evite repetição de frases-tipo.
-18. A estrutura dos argumentos deve fluir de forma única: premissa → evidência → análise crítica → implicação para Angola.`;
+18. A estrutura dos argumentos deve fluir de forma única: premissa → evidência → análise crítica → implicação para Angola.
+
+REGRAS DE HUMANIZAÇÃO — TEXTO QUE SOA HUMANO, NÃO ROBÓTICO:
+19. Varie RADICALMENTE o ritmo das frases: alterne entre frases curtas (5–9 palavras) para criar enfâse, frases médias (15–22 palavras), e frases longas e densas (30–48 palavras). NUNCA dois parágrafos seguidos com o mesmo ritmo frásico.
+20. Use vocabulário imprevisível — em vez de "importante" escreva "fulcral", "de peso", "que não pode ser ignorado"; em vez de "utilizar", "recorrer a", "lançar mão de"; em vez de "analisar", "debruçar-se sobre", "escrutinar", "examinar de perto".
+21. PALAVRAS BANIDAS que denunciam texto de IA: "notavelmente", "crucial", "fundamental", "em conclusão", "em resumo", "por conseguinte", "além disso", "adicionalmente", "é importante notar", "em última análise", "vale ressaltar", "é de salientar", "é importante destacar", "em suma", "desta forma", "deste modo", "abrangente", "robusto", "certamente", "cabe destacar", "diante do exposto". Nunca use estas expressões.
+22. Use conectores orgânicos e humanos: "Daí que", "Posto isto", "Ora bem", "O que quer dizer que", "Dito isto", "Voltando ao ponto central", "Não é por acaso que", "Acontece que", "O curioso é que", "Convém não esquecer que". Evite "Além disso", "Adicionalmente", "Por conseguinte".
+23. Introduza a voz do investigador — transforme passiva em activa. Use: "O que este estudo pôs a descoberto foi...", "Ao cruzar os dados, tornou-se evidente que...", "O investigador deparou-se com...".
+24. Inclua imperfeições humanas calibradas: reformulações espontâneas ("— ou melhor, —"), qualificações honestas ("Salvo melhor interpretação..."), transições reflexivas ("E aqui reside, talvez, o contributo mais relevante deste trabalho.").
+25. Use pontuação expressiva: travessão (—) para inserções laterais, parênteses para comentários do investigador, ponto-e-vírgula para ligar ideias. Comece ALGUNS parágrafos com conjunções ("E o que os dados mostram...", "Mas há um aspecto...", "Ora, o problema...").
+26. Prefira parágrafos corridos a listas. A estrutura deve fluir organicamente — como alguém que constrói um argumento, não que preenche um formulário. Nunca comece parágrafos consecutivos da mesma forma.`;
 
 /* ──────────────────────────────────────────────────────────────────────────
    Instruções específicas por secção
