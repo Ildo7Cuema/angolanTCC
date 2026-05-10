@@ -1,30 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  Plus,
-  GraduationCap,
-  LogOut,
-  FileText,
-  Clock,
-  ChevronRight,
-  Sparkles,
-  FolderOpen,
-  ArrowUpCircle,
-  X,
-  AlertTriangle,
+  Plus, LogOut, FileText, Clock, ChevronRight, Sparkles, FolderOpen,
+  ArrowUpCircle, Search, Filter, ShieldCheck, BookOpenCheck, BarChart3, Layers,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Navbar from '../components/Navbar'
+import PageLayout from '../components/PageLayout'
+import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
+import { SkeletonStat, SkeletonCard } from '../components/ui/Skeleton'
+import StatCard from '../components/ui/StatCard'
+import Tabs from '../components/ui/Tabs'
+import BottomSheet from '../components/ui/BottomSheet'
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
+  hidden:  { opacity: 0, y: 12 },
   visible: (i = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.05, duration: 0.4 },
+    opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: [0.16, 1, 0.3, 1] },
   }),
 }
 
@@ -33,19 +29,17 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
-  const [migratingProject, setMigratingProject] = useState(null)
+
+  const [migrating, setMigrating] = useState(null)
   const [migrationLoading, setMigrationLoading] = useState(false)
 
-  useEffect(() => {
-    fetchProjects()
-  }, [])
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('all') // all | tcc | anteprojecto | completed
+
+  useEffect(() => { fetchProjects() }, [])
 
   const fetchProjects = async () => {
-    if (!user?.id) {
-      setLoading(false)
-      return
-    }
-
+    if (!user?.id) { setLoading(false); return }
     const { data, error } = await supabase
       .from('projects')
       .select('*')
@@ -53,12 +47,6 @@ export default function Dashboard() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching projects:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      })
       toast.error(`Erro ao carregar projectos: ${error.message}`)
     } else {
       setProjects(data || [])
@@ -72,187 +60,228 @@ export default function Dashboard() {
     navigate('/')
   }
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('pt-AO', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
-  }
+  const formatDate = (s) =>
+    new Date(s).toLocaleDateString('pt-AO', { day: '2-digit', month: 'short', year: 'numeric' })
 
-  const statusLabel = (status) => {
+  const isAnteProjecto = (p) => p.sections?.projectType === 'anteprojecto'
+  const hasMigratedTCC = (apId) => projects.some((p) => p.source_project_id === apId)
+
+  const stats = useMemo(() => {
+    const total       = projects.length
+    const aps         = projects.filter(isAnteProjecto).length
+    const tccs        = total - aps
+    const completed   = projects.filter((p) => p.status === 'completed').length
+    return { total, tccs, aps, completed }
+  }, [projects])
+
+  const visibleProjects = useMemo(() => {
+    return projects.filter((p) => {
+      const titleMatch = !search || (p.title || '').toLowerCase().includes(search.toLowerCase())
+      const ap = isAnteProjecto(p)
+      let typeMatch = true
+      if (filter === 'tcc') typeMatch = !ap
+      else if (filter === 'anteprojecto') typeMatch = ap
+      else if (filter === 'completed') typeMatch = p.status === 'completed'
+      return titleMatch && typeMatch
+    })
+  }, [projects, search, filter])
+
+  const statusBadge = (status) => {
     const map = {
-      draft: { text: 'Rascunho', className: 'badge-warning' },
-      generating: { text: 'A gerar...', className: 'badge-info' },
-      completed: { text: 'Concluído', className: 'badge-success' },
+      draft:      { text: 'Rascunho',  cls: 'badge-warning' },
+      generating: { text: 'A gerar…',  cls: 'badge-info' },
+      completed:  { text: 'Concluído', cls: 'badge-success' },
     }
     const s = map[status] || map.draft
-    return <span className={`badge ${s.className}`}>{s.text}</span>
+    return <span className={`badge ${s.cls}`}>{s.text}</span>
   }
 
-  const isAnteProjecto = (project) =>
-    project.sections?.projectType === 'anteprojecto'
-
-  const hasMigratedTCC = (anteProjectoId) =>
-    projects.some((p) => p.source_project_id === anteProjectoId)
-
-  const handleMigrateClick = (e, project) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setMigratingProject(project)
-  }
-
+  // ── Migration AP → TCC ──────────────────────────────────────────────────
   const confirmMigration = async () => {
-    if (!migratingProject) return
+    if (!migrating) return
     setMigrationLoading(true)
-
-    const ap = migratingProject
-    const apSections = ap.sections || {}
+    const ap = migrating
+    const apS = ap.sections || {}
 
     const inheritedContent = {
       projectType: 'tcc',
-      academic_norm: apSections.academic_norm || 'ABNT',
-      university: apSections.university,
-      university_city: apSections.university_city,
-      father_name: apSections.father_name,
-      mother_name: apSections.mother_name,
-      other_relatives: apSections.other_relatives,
-      db_structure: apSections.db_structure,
-      introducao: apSections.introducao || null,
-      revisao_literatura: apSections.fundamentacao_teorica || null,
-      metodologia: apSections.metodologia || null,
-      referencias: apSections.referencias || null,
+      academic_norm: apS.academic_norm || 'ABNT',
+      university: apS.university,
+      university_city: apS.university_city,
+      father_name: apS.father_name,
+      mother_name: apS.mother_name,
+      other_relatives: apS.other_relatives,
+      db_structure: apS.db_structure,
+      introducao: apS.introducao || null,
+      revisao_literatura: apS.fundamentacao_teorica || null,
+      metodologia: apS.metodologia || null,
+      referencias: apS.referencias || null,
     }
 
     const { data: newProject, error: projErr } = await supabase
       .from('projects')
       .insert({
         user_id: user.id,
-        title: ap.title,
-        university: ap.university,
-        course: ap.course,
-        student_name: ap.student_name,
-        advisor: ap.advisor,
-        topic: ap.topic,
-        problem_statement: ap.problem_statement,
-        methodology: ap.methodology,
-        year: ap.year,
-        status: 'draft',
-        sections: inheritedContent,
-        source_project_id: ap.id,
+        title: ap.title, university: ap.university, course: ap.course,
+        student_name: ap.student_name, advisor: ap.advisor, topic: ap.topic,
+        problem_statement: ap.problem_statement, methodology: ap.methodology, year: ap.year,
+        status: 'draft', sections: inheritedContent, source_project_id: ap.id,
       })
-      .select()
-      .single()
+      .select().single()
 
     if (projErr || !newProject) {
       toast.error(`Erro ao criar TCC: ${projErr?.message || 'Tente novamente'}`)
-      setMigrationLoading(false)
-      return
+      setMigrationLoading(false); return
     }
 
     const refCode = 'TCC-' + Math.random().toString(36).substring(2, 7).toUpperCase()
     const { error: payErr } = await supabase.from('payments').insert({
-      user_id: user.id,
-      project_id: newProject.id,
-      amount: 35000,
-      reference_code: refCode,
-      status: 'pendente',
+      user_id: user.id, project_id: newProject.id, amount: 35000,
+      reference_code: refCode, status: 'pendente',
     })
 
     if (payErr) {
       toast.error('TCC criado mas erro no pagamento. Aceda ao projecto para resolver.')
-      setMigrationLoading(false)
-      setMigratingProject(null)
+      setMigrationLoading(false); setMigrating(null)
       await fetchProjects()
       navigate(`/project/${newProject.id}`)
       return
     }
-
-    toast.success('TCC criado com sucesso! Efectue o pagamento para continuar.')
-    setMigrationLoading(false)
-    setMigratingProject(null)
+    toast.success('TCC criado! Efectue o pagamento para continuar.')
+    setMigrationLoading(false); setMigrating(null)
     navigate(`/payment/${newProject.id}`)
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen overflow-x-hidden">
-      {/* Top bar */}
       <Navbar
         rightContent={
-          <div className="flex items-center gap-3">
+          <>
             {user?.email === 'ildocuema@gmail.com' && (
-              <Link
-                to="/admin"
-                className="text-sm px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-medium transition-colors"
-              >
-                Painel Admin
+              <Link to="/admin" className="hidden sm:inline-flex h-9 px-3 items-center gap-1.5 rounded-lg bg-primary-50 text-primary-600 hover:bg-primary-100 text-xs font-semibold transition-colors">
+                <ShieldCheck className="w-4 h-4" /> Admin
               </Link>
             )}
-            <span className="text-sm text-slate-500 hidden sm:block">
+            <span className="hidden md:block text-sm text-dark-500 max-w-[180px] truncate">
               {user?.user_metadata?.full_name || user?.email}
             </span>
             <button
               onClick={handleSignOut}
-              className="btn-secondary text-sm px-3 py-2 rounded-lg flex items-center gap-2"
+              className="btn-secondary h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs"
             >
-              <LogOut className="w-4 h-4" /> Sair
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sair</span>
             </button>
-          </div>
+          </>
         }
       />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-24 pb-12 w-full min-w-0">
-        {/* Header */}
+      <PageLayout maxWidth="max-w-6xl">
+        {/* ── HEADER ────────────────────────────────────────────────── */}
         <motion.div
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8"
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8 sm:mb-10"
         >
           <div>
-            <h1 className="text-3xl font-display font-bold text-slate-900">Meus Projectos</h1>
-            <p className="text-slate-500 text-sm mt-1">
+            <span className="eyebrow mb-3"><Sparkles className="w-3.5 h-3.5" /> WORKSPACE</span>
+            <h1 className="mt-3 text-3xl sm:text-4xl font-display font-extrabold tracking-tight text-dark-900">
+              Olá, {(user?.user_metadata?.full_name || user?.email || '').split(' ')[0]} 👋
+            </h1>
+            <p className="text-dark-500 text-sm sm:text-base mt-1.5">
               Gerencie os seus Trabalhos de Conclusão de Curso e Ante-Projectos.
             </p>
           </div>
-          <Link
-            to="/new-project"
-            className="btn-primary px-5 py-3 rounded-xl flex items-center gap-2 text-sm w-fit"
-          >
-            <Plus className="w-4 h-4" /> Novo Projecto
+          <Link to="/new-project" className="hidden sm:inline-flex">
+            <Button size="lg" leftIcon={Plus}>Novo Projecto</Button>
           </Link>
         </motion.div>
 
-        {/* Projects */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="loading-spinner" />
+        {/* ── STATS ─────────────────────────────────────────────────── */}
+        <motion.section
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10"
+        >
+          {loading ? (
+            <>
+              <SkeletonStat /><SkeletonStat /><SkeletonStat /><SkeletonStat />
+            </>
+          ) : (
+            <>
+              <StatCard label="Total"        value={stats.total}     icon={Layers}        tone="primary" />
+              <StatCard label="TCCs"         value={stats.tccs}      icon={BookOpenCheck} tone="info"    />
+              <StatCard label="Ante-Projectos" value={stats.aps}      icon={FileText}      tone="warning" />
+              <StatCard label="Concluídos"   value={stats.completed} icon={BarChart3}     tone="success" />
+            </>
+          )}
+        </motion.section>
+
+        {/* ── TOOLBAR ───────────────────────────────────────────────── */}
+        <motion.div
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5"
+        >
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Pesquisar projectos…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input-field pl-10 h-11"
+            />
           </div>
-        ) : projects.length === 0 ? (
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            className="glass-card rounded-2xl p-12 text-center"
-          >
-            <FolderOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">Nenhum projecto ainda</h2>
-            <p className="text-slate-500 mb-6 text-sm">
-              Comece a criar o seu primeiro TCC com inteligência artificial.
-            </p>
-            <Link
-              to="/new-project"
-              className="btn-primary px-6 py-3 rounded-xl inline-flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" /> Criar Projecto
-            </Link>
-          </motion.div>
+
+          <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide -mx-1 px-1">
+            <Filter className="w-4 h-4 text-dark-400 flex-shrink-0" />
+            <Tabs
+              size="sm"
+              value={filter}
+              onChange={setFilter}
+              tabs={[
+                { id: 'all',          label: 'Todos' },
+                { id: 'tcc',          label: 'TCC' },
+                { id: 'anteprojecto', label: 'Ante-Projecto' },
+                { id: 'completed',    label: 'Concluídos' },
+              ]}
+            />
+          </div>
+        </motion.div>
+
+        {/* ── PROJECTS GRID ─────────────────────────────────────────── */}
+        {loading ? (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+          </div>
+        ) : visibleProjects.length === 0 ? (
+          <EmptyState
+            icon={FolderOpen}
+            title={projects.length === 0 ? 'Nenhum projecto ainda' : 'Sem resultados'}
+            description={projects.length === 0
+              ? 'Crie o seu primeiro TCC ou Ante-Projecto com inteligência artificial.'
+              : 'Ajuste a pesquisa ou os filtros para encontrar os seus projectos.'}
+            action={projects.length === 0 ? (
+              <Link to="/new-project">
+                <Button size="lg" leftIcon={Sparkles}>Criar primeiro projecto</Button>
+              </Link>
+            ) : null}
+          />
         ) : (
-          <div className="grid gap-4">
-            {projects.map((project, i) => {
-              const isAP = isAnteProjecto(project)
+          <motion.div
+            variants={fadeUp} initial="hidden" animate="visible"
+            className="grid sm:grid-cols-2 gap-3 sm:gap-4"
+          >
+            {visibleProjects.map((project, i) => {
+              const ap = isAnteProjecto(project)
               const alreadyMigrated = hasMigratedTCC(project.id)
-              const isMigratedTCC = !isAP && project.source_project_id
+              const isMigratedTCC = !ap && project.source_project_id
+
+              const tone = ap ? 'amber' : isMigratedTCC ? 'emerald' : 'primary'
+              const toneCls = {
+                amber:    { bg: 'bg-amber-50',    fg: 'text-amber-600',    ring: 'ring-amber-100' },
+                emerald:  { bg: 'bg-emerald-50',  fg: 'text-emerald-600',  ring: 'ring-emerald-100' },
+                primary:  { bg: 'bg-primary-50',  fg: 'text-primary-600',  ring: 'ring-primary-100' },
+              }[tone]
 
               return (
                 <motion.div
@@ -265,172 +294,106 @@ export default function Dashboard() {
                 >
                   <Link
                     to={`/project/${project.id}`}
-                    className="glass-card rounded-xl p-4 flex items-start gap-3 group w-full min-w-0"
+                    className="premium-card p-4 sm:p-5 flex items-start gap-4 group"
                   >
-                    {/* Icon */}
-                    <div className="flex-shrink-0 mt-0.5">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                          isAP
-                            ? 'bg-amber-50'
-                            : isMigratedTCC
-                            ? 'bg-emerald-50'
-                            : 'bg-indigo-50'
-                        }`}
-                      >
-                        <FileText
-                          className={`w-5 h-5 ${
-                            isAP
-                              ? 'text-amber-500'
-                              : isMigratedTCC
-                              ? 'text-emerald-500'
-                              : 'text-indigo-600'
-                          }`}
-                        />
-                      </div>
+                    <div className={`flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center ring-1 ${toneCls.bg} ${toneCls.fg} ${toneCls.ring}`}>
+                      <FileText className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-2">
-                        <h3 className="font-semibold text-slate-900 leading-snug break-words flex-1 min-w-0">
+                        <h3 className="font-display font-bold text-dark-900 leading-snug break-words flex-1 min-w-0">
                           {project.title || 'Projecto sem título'}
                         </h3>
-                        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-500 transition-colors flex-shrink-0 mt-0.5" />
+                        <ChevronRight className="w-5 h-5 text-dark-300 group-hover:text-primary-500 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-0.5" />
                       </div>
 
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span
-                          className={`badge ${
-                            isAP
-                              ? 'badge-warning'
-                              : isMigratedTCC
-                              ? 'badge-success'
-                              : 'badge-info'
-                          }`}
-                        >
-                          {isAP ? 'Ante-Projecto' : isMigratedTCC ? 'TCC (migrado)' : 'TCC'}
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className={`badge ${ap ? 'badge-warning' : isMigratedTCC ? 'badge-success' : 'badge-info'}`}>
+                          {ap ? 'Ante-Projecto' : isMigratedTCC ? 'TCC (migrado)' : 'TCC'}
                         </span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3 flex-shrink-0" />
+                        {statusBadge(project.status)}
+                        <span className="text-[11px] text-dark-400 inline-flex items-center gap-1 ml-auto">
+                          <Clock className="w-3 h-3" />
                           {formatDate(project.created_at)}
                         </span>
-                        {statusLabel(project.status)}
                       </div>
 
-                      {isAP && !alreadyMigrated && (
-                        <div className="mt-2.5">
+                      {ap && !alreadyMigrated && (
+                        <div className="mt-3">
                           <button
-                            onClick={(e) => handleMigrateClick(e, project)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors border border-emerald-200"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMigrating(project) }}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors border border-emerald-200"
                           >
                             <ArrowUpCircle className="w-3.5 h-3.5" />
-                            Migrar p/ TCC
+                            Migrar para TCC
                           </button>
                         </div>
                       )}
-                      {isAP && alreadyMigrated && (
-                        <span className="mt-1.5 text-xs text-slate-400 block">Já migrado</span>
+                      {ap && alreadyMigrated && (
+                        <span className="mt-1.5 text-xs text-dark-400 block">Já migrado</span>
                       )}
                     </div>
                   </Link>
                 </motion.div>
               )
             })}
-          </div>
-        )}
-      </main>
-
-      {/* Migration Modal */}
-      <AnimatePresence>
-        {migratingProject && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-            onClick={() => !migrationLoading && setMigratingProject(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass-card rounded-2xl p-6 max-w-md w-full"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                  <ArrowUpCircle className="w-6 h-6 text-emerald-500" />
-                </div>
-                <button
-                  onClick={() => !migrationLoading && setMigratingProject(null)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <h2 className="text-lg font-display font-bold text-slate-900 mb-2">
-                Migrar para TCC
-              </h2>
-              <p className="text-slate-500 text-sm mb-1">
-                Será criado um novo TCC com base no ante-projecto:
-              </p>
-              <p className="text-slate-800 font-medium text-sm mb-4 truncate">
-                "{migratingProject.title}"
-              </p>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 space-y-2 text-sm text-slate-600">
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                  <span>Metadados herdados (título, tema, curso, orientador)</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                  <span>Conteúdo reutilizável copiado (introdução, fundamentação, metodologia, referências)</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500 font-bold mt-0.5">✓</span>
-                  <span>O ante-projecto original permanece intacto</span>
-                </div>
-                <div className="flex items-start gap-2 pt-1 border-t border-slate-200">
-                  <span className="text-amber-600">
-                    Será necessário efectuar o pagamento de <strong>35.000 AOA</strong> para o TCC.
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => !migrationLoading && setMigratingProject(null)}
-                  disabled={migrationLoading}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors text-sm font-medium disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmMigration}
-                  disabled={migrationLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {migrationLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      A migrar...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUpCircle className="w-4 h-4" />
-                      Confirmar Migração
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </PageLayout>
+
+      {/* FAB mobile (substitui CTA do header em ecrãs pequenos) */}
+      <Link
+        to="/new-project"
+        className="sm:hidden fixed bottom-24 right-4 z-30 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-600 to-accent-600 text-white flex items-center justify-center shadow-glow active:scale-95 transition-transform pb-safe"
+        aria-label="Novo Projecto"
+      >
+        <Plus className="w-6 h-6" />
+      </Link>
+
+      {/* Migration Bottom Sheet */}
+      <BottomSheet
+        open={!!migrating}
+        onClose={() => !migrationLoading && setMigrating(null)}
+        title="Migrar para TCC"
+        description="Será criado um novo TCC com base no ante-projecto seleccionado."
+        footer={
+          <div className="flex gap-2.5">
+            <Button
+              variant="secondary" fullWidth
+              onClick={() => !migrationLoading && setMigrating(null)}
+              disabled={migrationLoading}
+            >Cancelar</Button>
+            <Button
+              variant="success" fullWidth
+              onClick={confirmMigration}
+              loading={migrationLoading}
+              leftIcon={ArrowUpCircle}
+            >Confirmar</Button>
+          </div>
+        }
+      >
+        <p className="text-dark-700 font-medium text-sm mb-4 truncate">
+          "{migrating?.title}"
+        </p>
+        <ul className="space-y-2.5 text-sm text-dark-600">
+          {[
+            'Metadados herdados (título, tema, curso, orientador)',
+            'Conteúdo reutilizável copiado (introdução, fundamentação, metodologia, referências)',
+            'O ante-projecto original permanece intacto',
+          ].map((t) => (
+            <li key={t} className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-success-50 ring-1 ring-success-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-success-500" />
+              </span>
+              {t}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          Será necessário pagar <strong>35.000 AOA</strong> para liberar o novo TCC.
+        </div>
+      </BottomSheet>
     </div>
   )
 }

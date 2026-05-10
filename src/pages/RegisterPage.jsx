@@ -1,14 +1,21 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { GraduationCap, Mail, Lock, User, Eye, EyeOff, ArrowRight, Users, Heart } from 'lucide-react'
+import { GraduationCap, Mail, Lock, User, ArrowRight, Heart, Users, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+
+const fadeUp = {
+  hidden:  { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+}
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [fatherName, setFatherName] = useState('')
   const [motherName, setMotherName] = useState('')
   const [otherRelatives, setOtherRelatives] = useState('')
@@ -26,15 +33,11 @@ export default function RegisterPage() {
       toast.error('A senha deve ter pelo menos 6 caracteres')
       return
     }
-
     setLoading(true)
     const { error } = await signUp(email, password, fullName, {
-      fatherName,
-      motherName,
-      otherRelatives,
+      fatherName, motherName, otherRelatives,
     })
     setLoading(false)
-
     if (error) {
       toast.error(error.message)
     } else {
@@ -44,94 +47,155 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-lg">
-        <Link to="/" className="flex items-center justify-center gap-2.5 mb-10">
-          <GraduationCap className="w-10 h-10 text-indigo-600" />
-          <span className="text-2xl font-display font-bold text-indigo-700">AngolaTCC AI</span>
-        </Link>
+    <div className="min-h-screen grid lg:grid-cols-2">
+      {/* ── LEFT: form ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-center px-4 sm:px-6 py-10 sm:py-14">
+        <motion.div
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="w-full max-w-lg"
+        >
+          <Link to="/" className="inline-flex items-center justify-center gap-2.5 mb-8 group">
+            <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-600 to-accent-600 text-white flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-shadow">
+              <GraduationCap className="w-5 h-5" />
+            </span>
+            <span className="text-xl font-display font-bold tracking-tight text-dark-900">
+              AngolaTCC <span className="text-primary-600">AI</span>
+            </span>
+          </Link>
 
-        <div className="glass-card rounded-2xl p-8">
-          <h1 className="text-2xl font-display font-bold text-center text-slate-900 mb-2">Criar Conta</h1>
-          <p className="text-slate-500 text-center mb-8 text-sm">
-            Comece a gerar o seu TCC ou Ante-Projecto com IA.
+          <h1 className="text-3xl sm:text-4xl font-display font-extrabold tracking-tight text-dark-900 mb-2">
+            Criar <span className="gradient-text">conta</span>
+          </h1>
+          <p className="text-dark-500 mb-8 text-sm sm:text-base">
+            Comece a gerar o seu TCC ou Ante-Projecto com IA em segundos.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Nome Completo <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="input-field pl-10" placeholder="Seu nome completo" />
-              </div>
-            </div>
+            <Input
+              label="Nome Completo"
+              required
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              leftIcon={User}
+              placeholder="O seu nome completo"
+            />
+            <Input
+              label="Email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              leftIcon={Mail}
+              placeholder="seu@email.com"
+            />
+            <Input
+              label="Senha"
+              type="password"
+              required
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              leftIcon={Lock}
+              placeholder="Mínimo 6 caracteres"
+              hint="Use uma senha forte com letras, números e símbolos."
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-field pl-10" placeholder="seu@email.com" />
+            {/* Família — opcional, agrupado num bloco subtil */}
+            <div className="rounded-2xl border border-dark-100 bg-dark-50/50 p-5 mt-2">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-7 h-7 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center">
+                  <Heart className="w-4 h-4" />
+                </span>
+                <h3 className="text-sm font-semibold text-dark-900">Família para a Dedicatória</h3>
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-dark-400 font-semibold">Opcional</span>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Senha <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className="input-field pl-10 pr-10" placeholder="Mínimo 6 caracteres" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 pt-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Heart className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold text-slate-700">Família para a Dedicatória</h3>
-              </div>
-              <p className="text-xs text-slate-400 mb-4">
-                Estes dados serão usados pela IA para personalizar a dedicatória do seu TCC. São opcionais.
+              <p className="text-xs text-dark-500 mb-4">
+                A IA usará estes nomes ao gerar a dedicatória do seu TCC. Pode preencher mais tarde.
               </p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Nome do Pai</label>
-                  <div className="relative">
-                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" value={fatherName} onChange={(e) => setFatherName(e.target.value)} className="input-field pl-9 text-sm" placeholder="Ex: Manuel Silva" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Nome da Mãe</label>
-                  <div className="relative">
-                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" value={motherName} onChange={(e) => setMotherName(e.target.value)} className="input-field pl-9 text-sm" placeholder="Ex: Maria da Conceição" />
-                  </div>
-                </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Input
+                  label="Pai"
+                  value={fatherName}
+                  onChange={(e) => setFatherName(e.target.value)}
+                  leftIcon={Users}
+                  placeholder="Ex: Manuel Silva"
+                />
+                <Input
+                  label="Mãe"
+                  value={motherName}
+                  onChange={(e) => setMotherName(e.target.value)}
+                  leftIcon={Users}
+                  placeholder="Ex: Maria da Conceição"
+                />
               </div>
-              <div className="mt-4">
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Outros Parentes (Opcional)</label>
-                <textarea value={otherRelatives} onChange={(e) => setOtherRelatives(e.target.value)} className="input-field text-sm min-h-[70px] resize-none" placeholder="Irmãos, avós, colegas..." />
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-dark-700 mb-1.5">
+                  Outros familiares
+                </label>
+                <textarea
+                  value={otherRelatives}
+                  onChange={(e) => setOtherRelatives(e.target.value)}
+                  className="input-field text-sm min-h-[72px] resize-none"
+                  placeholder="Irmãos, avós, colegas, mentores…"
+                />
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3 rounded-xl flex items-center justify-center gap-2 text-base disabled:opacity-50">
-              {loading ? <div className="loading-spinner w-5 h-5 border-2" /> : <>Criar Conta <ArrowRight className="w-4 h-4" /></>}
-            </button>
+            <Button
+              type="submit"
+              size="lg"
+              fullWidth
+              loading={loading}
+              rightIcon={ArrowRight}
+              className="mt-2"
+            >
+              Criar conta
+            </Button>
           </form>
 
-          <p className="text-center text-slate-500 text-sm mt-6">
+          <p className="text-center text-dark-500 text-sm mt-6">
             Já tem conta?{' '}
-            <Link to="/login" className="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">Entrar</Link>
+            <Link to="/login" className="text-primary-600 hover:text-primary-700 font-semibold transition-colors">
+              Entrar
+            </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
+
+      {/* ── RIGHT: marketing ───────────────────────────────────────── */}
+      <aside className="hidden lg:flex relative items-center justify-center p-12 overflow-hidden bg-gradient-to-br from-accent-600 via-accent-500 to-primary-600 text-white">
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-primary-300/20 rounded-full blur-3xl" />
+        <div className="absolute inset-0 bg-noise opacity-[0.04] mix-blend-overlay pointer-events-none" />
+
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" className="relative max-w-md text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold mb-8 ring-1 ring-white/20">
+            <Sparkles className="w-3.5 h-3.5" /> Novo · 100% pt-AO
+          </div>
+
+          <h2 className="text-4xl xl:text-5xl font-display font-extrabold leading-tight mb-6">
+            Comece em <br /><span className="text-amber-200">menos de 60 segundos.</span>
+          </h2>
+          <p className="text-white/85 text-lg leading-relaxed mb-10">
+            Sem cartão de crédito. Pagamento Express por TCC ou Ante-Projecto, validação em até 1h útil.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 text-left">
+            {[
+              { v: '500+', l: 'TCCs gerados' },
+              { v: '50+',  l: 'Universidades' },
+              { v: '4.9',  l: 'Satisfação ★' },
+            ].map((s) => (
+              <div key={s.l} className="rounded-2xl bg-white/10 backdrop-blur-md ring-1 ring-white/15 p-4">
+                <div className="text-2xl font-display font-extrabold">{s.v}</div>
+                <div className="text-[11px] text-white/70 mt-1">{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </aside>
     </div>
   )
 }

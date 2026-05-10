@@ -1,60 +1,43 @@
 import { useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Trash2, Info, X } from 'lucide-react'
+import { AlertTriangle, Trash2, Info, X, Loader2 } from 'lucide-react'
 
 const VARIANTS = {
   danger: {
     icon: Trash2,
-    iconBg: 'bg-red-500/10',
-    iconColor: 'text-red-400',
-    alertBg: 'bg-red-500/5 border-red-500/20',
-    alertText: 'text-red-400',
-    confirmBg: 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/25',
+    iconBg: 'bg-danger-50',
+    iconColor: 'text-danger-600',
+    alertBg: 'bg-danger-50/80 border-danger-100',
+    alertText: 'text-danger-700',
+    confirmCls: 'bg-gradient-to-br from-danger-600 to-danger-500 text-white shadow-md hover:shadow-lg hover:-translate-y-px',
   },
   warning: {
     icon: AlertTriangle,
-    iconBg: 'bg-orange-500/10',
-    iconColor: 'text-orange-400',
-    alertBg: 'bg-orange-500/5 border-orange-500/20',
-    alertText: 'text-orange-400',
-    confirmBg: 'bg-orange-500/15 border-orange-500/30 text-orange-400 hover:bg-orange-500/25',
+    iconBg: 'bg-warning-50',
+    iconColor: 'text-warning-600',
+    alertBg: 'bg-warning-50/80 border-warning-100',
+    alertText: 'text-warning-700',
+    confirmCls: 'bg-gradient-to-br from-warning-600 to-warning-500 text-white shadow-md hover:shadow-lg hover:-translate-y-px',
   },
   info: {
     icon: Info,
-    iconBg: 'bg-blue-500/10',
-    iconColor: 'text-blue-400',
-    alertBg: 'bg-blue-500/5 border-blue-500/20',
-    alertText: 'text-blue-400',
-    confirmBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400 hover:bg-blue-500/25',
+    iconBg: 'bg-info-50',
+    iconColor: 'text-info-600',
+    alertBg: 'bg-info-50/80 border-info-100',
+    alertText: 'text-info-700',
+    confirmCls: 'bg-gradient-to-br from-info-600 to-info-500 text-white shadow-md hover:shadow-lg hover:-translate-y-px',
   },
 }
 
-const overlayVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2 } },
-  exit: { opacity: 0, transition: { duration: 0.15 } },
-}
-
-const dialogVariants = {
-  hidden: { opacity: 0, scale: 0.92, y: 12 },
-  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' } },
-  exit: { opacity: 0, scale: 0.94, y: 8, transition: { duration: 0.15 } },
+const overlay = {
+  hidden:  { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.18 } },
+  exit:    { opacity: 0, transition: { duration: 0.14 } },
 }
 
 /**
- * ConfirmDialog — modal de confirmação reutilizável.
- *
- * Props:
- *   open          boolean          — visibilidade do modal
- *   variant       'danger' | 'warning' | 'info'  — esquema de cor
- *   title         string           — título do modal
- *   message       string | node    — mensagem principal
- *   detail        string | node    — texto da caixa de destaque (opcional)
- *   confirmLabel  string           — texto do botão de confirmar
- *   cancelLabel   string           — texto do botão de cancelar
- *   loading       boolean          — estado de carregamento no botão confirmar
- *   onConfirm     () => void       — callback ao confirmar
- *   onCancel      () => void       — callback ao cancelar / fechar
+ * ConfirmDialog premium — em mobile sobe como bottom sheet,
+ * em desktop aparece como modal centrado com spring animation.
  */
 export default function ConfirmDialog({
   open,
@@ -74,101 +57,117 @@ export default function ConfirmDialog({
   const handleKeyDown = useCallback(
     (e) => {
       if (!open) return
-      if (e.key === 'Escape') onCancel?.()
+      if (e.key === 'Escape' && !loading) onCancel?.()
     },
-    [open, onCancel]
+    [open, onCancel, loading],
   )
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
+    if (open) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        document.body.style.overflow = prev
+      }
+    }
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+  }, [handleKeyDown, open])
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          key="overlay"
-          variants={overlayVariants}
+          key="ovl"
+          variants={overlay}
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-dark-900/50 backdrop-blur-sm sm:p-4"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) onCancel?.()
+            if (!loading && e.target === e.currentTarget) onCancel?.()
           }}
         >
           <motion.div
-            key="dialog"
-            variants={dialogVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="glass-card rounded-2xl p-8 max-w-md w-full shadow-2xl relative"
+            key="dlg"
+            initial={{ y: '100%', opacity: 0.6, scale: 1 }}
+            animate={{ y: 0,        opacity: 1,   scale: 1 }}
+            exit   ={{ y: '100%', opacity: 0,   scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 32, mass: 0.7 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={(_, info) => {
+              if (!loading && (info.offset.y > 120 || info.velocity.y > 600)) onCancel?.()
+            }}
+            className={[
+              'w-full sm:max-w-md bg-white border-t sm:border border-dark-100',
+              'rounded-t-3xl sm:rounded-3xl shadow-2xl pb-safe sm:pb-0',
+              'p-6 sm:p-7 relative',
+            ].join(' ')}
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="confirm-dialog-title"
-            aria-describedby="confirm-dialog-desc"
+            aria-labelledby="cd-title"
+            aria-describedby="cd-desc"
           >
-            {/* Botão fechar no canto */}
+            {/* drag handle (mobile) */}
+            <div className="sm:hidden -mt-3 mb-3"><div className="sheet-handle" /></div>
+
+            {/* close */}
             <button
               onClick={onCancel}
               disabled={loading}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-all"
+              className="absolute top-4 right-4 btn-icon"
               aria-label="Fechar"
             >
               <X className="w-4 h-4" />
             </button>
 
-            {/* Cabeçalho */}
-            <div className="flex items-center gap-3 mb-4 pr-6">
-              <div className={`p-3 rounded-xl ${v.iconBg} flex-shrink-0`}>
+            {/* head */}
+            <div className="flex items-center gap-3.5 mb-4 pr-8">
+              <div className={`p-3 rounded-2xl flex-shrink-0 ring-1 ring-inset ring-current/10 ${v.iconBg}`}>
                 <Icon className={`w-6 h-6 ${v.iconColor}`} />
               </div>
               <h3
-                id="confirm-dialog-title"
-                className="text-xl font-display font-bold text-slate-900 leading-tight"
+                id="cd-title"
+                className="text-lg sm:text-xl font-display font-bold text-dark-900 leading-tight"
               >
                 {title}
               </h3>
             </div>
 
-            {/* Mensagem principal */}
             {message && (
-              <p
-                id="confirm-dialog-desc"
-                className="text-slate-500 mb-3 leading-relaxed"
-              >
+              <p id="cd-desc" className="text-dark-600 text-sm leading-relaxed mb-3">
                 {message}
               </p>
             )}
 
-            {/* Caixa de destaque */}
             {detail && (
-              <div className={`border rounded-xl px-4 py-3 mb-6 ${v.alertBg}`}>
-                <p className={`text-sm font-medium flex items-center gap-2 ${v.alertText}`}>
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  {detail}
+              <div className={`border rounded-xl px-4 py-3 mb-5 ${v.alertBg}`}>
+                <p className={`text-sm font-medium flex items-start gap-2 ${v.alertText}`}>
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{detail}</span>
                 </p>
               </div>
             )}
 
-            {/* Acções */}
-            <div className="flex gap-3 mt-6">
+            {/* actions */}
+            <div className="flex flex-col-reverse sm:flex-row gap-2.5 mt-6">
               <button
                 onClick={onCancel}
                 disabled={loading}
-                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-200 transition-all text-sm font-medium"
+                className="flex-1 h-11 px-4 rounded-xl border border-dark-200 text-dark-700 hover:bg-dark-50 transition-all text-sm font-medium disabled:opacity-50"
               >
                 {cancelLabel}
               </button>
               <button
                 onClick={onConfirm}
                 disabled={loading}
-                className={`flex-1 px-4 py-3 rounded-xl border transition-all text-sm font-medium flex items-center justify-center gap-2 ${v.confirmBg}`}
+                className={`flex-1 h-11 px-4 rounded-xl transition-all text-sm font-semibold flex items-center justify-center gap-2 ${v.confirmCls} disabled:opacity-60`}
               >
                 {loading ? (
-                  <div className="loading-spinner" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
                     <Icon className="w-4 h-4" />

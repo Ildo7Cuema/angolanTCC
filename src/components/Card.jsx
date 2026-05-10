@@ -1,18 +1,15 @@
-export default function Card({ children, className = '', hover = true, onClick }) {
-  return (
-    <div
-      className={`glass-card rounded-2xl p-6 ${hover ? '' : 'hover:border-transparent hover:shadow-none hover:transform-none'} ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      onClick={onClick}
-    >
-      {children}
-    </div>
-  )
-}
+/**
+ * Legacy Card — re-export do novo componente em src/components/ui/Card.jsx.
+ * Mantém compatibilidade com `import Card from '../components/Card'`.
+ */
+export { default, CardHeader, CardBody, CardFooter } from './ui/Card'
 
-export function CardCompact({ children, className = '', hover = true }) {
+import Card from './ui/Card'
+
+export function CardCompact({ children, className = '', hover = true, ...rest }) {
   return (
-    <div className={`glass-card rounded-xl p-4 ${hover ? '' : 'hover:border-transparent hover:shadow-none hover:transform-none'} ${className}`}>
+    <Card padding="sm" className={`rounded-xl ${hover ? '' : 'pointer-events-none'} ${className}`} {...rest}>
       {children}
-    </div>
+    </Card>
   )
 }

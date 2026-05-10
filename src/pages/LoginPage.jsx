@@ -1,13 +1,27 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { GraduationCap, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { GraduationCap, Mail, Lock, ArrowRight, Sparkles, Shield, Zap, BookOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+
+const fadeUp = {
+  hidden:  { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+}
+
+const HIGHLIGHTS = [
+  { icon: Sparkles, text: 'IA Claude Sonnet treinada para o contexto académico angolano' },
+  { icon: Shield,   text: 'Conteúdo original, gerado exclusivamente para si' },
+  { icon: Zap,      text: 'TCC completo em minutos, exportado em Word formatado' },
+  { icon: BookOpen, text: 'Editor visual com gráficos, tabelas e diagramas Mermaid' },
+]
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -18,11 +32,9 @@ export default function LoginPage() {
       toast.error('Preencha todos os campos')
       return
     }
-
     setLoading(true)
     const { error } = await signIn(email, password)
     setLoading(false)
-
     if (error) {
       toast.error(error.message === 'Invalid login credentials'
         ? 'Email ou senha incorrectos.'
@@ -34,78 +46,118 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <Link to="/" className="flex items-center justify-center gap-2.5 mb-10">
-          <GraduationCap className="w-10 h-10 text-indigo-600" />
-          <span className="text-2xl font-display font-bold text-indigo-700">AngolaTCC AI</span>
-        </Link>
+    <div className="min-h-screen grid lg:grid-cols-2">
+      {/* ── LEFT: form ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-center px-4 sm:px-6 py-10 sm:py-16">
+        <motion.div
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="w-full max-w-md"
+        >
+          {/* logo */}
+          <Link to="/" className="inline-flex items-center justify-center gap-2.5 mb-10 group">
+            <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-600 to-accent-600 text-white flex items-center justify-center shadow-glow-sm group-hover:shadow-glow transition-shadow">
+              <GraduationCap className="w-5 h-5" />
+            </span>
+            <span className="text-xl font-display font-bold tracking-tight text-dark-900">
+              AngolaTCC <span className="text-primary-600">AI</span>
+            </span>
+          </Link>
 
-        {/* Card */}
-        <div className="glass-card rounded-2xl p-8">
-          <h1 className="text-2xl font-display font-bold text-center text-slate-900 mb-2">Entrar na Conta</h1>
-          <p className="text-slate-500 text-center mb-8 text-sm">
-            Aceda ao seu painel de projectos.
+          <h1 className="text-3xl sm:text-4xl font-display font-extrabold tracking-tight text-dark-900 mb-3">
+            Bem-vindo de <span className="gradient-text">volta</span>
+          </h1>
+          <p className="text-dark-500 mb-10 text-sm sm:text-base">
+            Aceda ao seu painel e continue de onde parou.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-10"
-                  placeholder="seu@email.com"
-                />
-              </div>
-            </div>
+            <Input
+              label="Email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              leftIcon={Mail}
+              placeholder="seu@email.com"
+              required
+            />
+            <Input
+              label="Senha"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              leftIcon={Lock}
+              placeholder="••••••••"
+              required
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Senha</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pl-10 pr-10"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 rounded-xl flex items-center justify-center gap-2 text-base disabled:opacity-50"
+              size="lg"
+              fullWidth
+              loading={loading}
+              rightIcon={ArrowRight}
+              className="mt-2"
             >
-              {loading ? (
-                <div className="loading-spinner w-5 h-5 border-2" />
-              ) : (
-                <>Entrar <ArrowRight className="w-4 h-4" /></>
-              )}
-            </button>
+              Entrar
+            </Button>
           </form>
 
-          <p className="text-center text-slate-500 text-sm mt-6">
+          <p className="text-center text-dark-500 text-sm mt-8">
             Não tem conta?{' '}
-            <Link to="/register" className="text-indigo-600 hover:text-indigo-500 font-medium transition-colors">
-              Criar conta
+            <Link to="/register" className="text-primary-600 hover:text-primary-700 font-semibold transition-colors">
+              Criar conta gratuitamente
             </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
+
+      {/* ── RIGHT: marketing panel ─────────────────────────────────── */}
+      <aside
+        className="hidden lg:flex relative items-center justify-center p-12 overflow-hidden bg-gradient-to-br from-primary-600 via-primary-500 to-accent-600 text-white"
+      >
+        {/* decorative blobs */}
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-accent-300/20 rounded-full blur-3xl" />
+        {/* noise overlay */}
+        <div className="absolute inset-0 bg-noise opacity-[0.04] mix-blend-overlay pointer-events-none" />
+
+        <motion.div
+          variants={fadeUp} initial="hidden" animate="visible"
+          className="relative max-w-md text-center"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold mb-8 ring-1 ring-white/20">
+            <Sparkles className="w-3.5 h-3.5" />
+            500+ estudantes angolanos confiam
+          </div>
+
+          <h2 className="text-4xl xl:text-5xl font-display font-extrabold leading-tight mb-6">
+            O futuro do TCC <br />
+            <span className="text-amber-200">já chegou.</span>
+          </h2>
+          <p className="text-white/85 text-lg leading-relaxed mb-10">
+            Inteligência artificial de elite para construir o seu Trabalho de Conclusão de Curso, do título ao Word final.
+          </p>
+
+          <ul className="space-y-3.5 text-left">
+            {HIGHLIGHTS.map((h, i) => (
+              <motion.li
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + i * 0.1 }}
+                className="flex items-start gap-3 text-sm text-white/90"
+              >
+                <span className="w-8 h-8 rounded-xl bg-white/15 backdrop-blur-md ring-1 ring-white/20 flex items-center justify-center flex-shrink-0">
+                  <h.icon className="w-4 h-4" />
+                </span>
+                <span className="pt-1.5">{h.text}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </motion.div>
+      </aside>
     </div>
   )
 }

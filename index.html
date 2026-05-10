@@ -2,14 +2,50 @@
 <html lang="pt-AO">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="AngolaTCC AI — Plataforma inteligente de geração automática de Trabalhos de Conclusão de Curso com Inteligência Artificial. A solução académica mais avançada de Angola." />
-    <meta name="theme-color" content="#0B1F3A" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
+    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0B1020" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- iOS PWA / "Add to Home Screen" -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="AngolaTCC AI" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- SEO -->
     <title>AngolaTCC AI — Geração Automática de TCC com IA</title>
+    <meta
+      name="description"
+      content="AngolaTCC AI — Plataforma inteligente de geração automática de Trabalhos de Conclusão de Curso com Inteligência Artificial. A solução académica mais avançada de Angola."
+    />
+    <meta name="keywords" content="TCC, Angola, IA, Inteligência Artificial, Monografia, Ante-Projecto" />
+    <meta name="author" content="AngolaTCC AI" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_AO" />
+    <meta property="og:title" content="AngolaTCC AI — Gera o teu TCC com IA" />
+    <meta property="og:description" content="Plataforma inteligente para criação de TCC e Ante-Projectos com IA, formatados nas normas académicas angolanas." />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    >
+
+    <style>
+      /* Splash básico para evitar flash branco antes do React montar */
+      html, body { background: #F7F8FB; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #0B1020; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

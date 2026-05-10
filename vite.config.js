@@ -78,5 +78,20 @@ export default defineConfig(({ mode }) => {
     preview: {
       proxy: functionsProxy,
     },
+    build: {
+      // Code-splitting estratégico para reduzir o bundle inicial e melhorar o TTI/LCP em mobile.
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor':   ['react', 'react-dom', 'react-router-dom'],
+            'animation':      ['framer-motion'],
+            'icons':          ['lucide-react'],
+            'supabase':       ['@supabase/supabase-js'],
+            'docx':           ['docx', 'file-saver'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 600,
+    },
   }
 })
