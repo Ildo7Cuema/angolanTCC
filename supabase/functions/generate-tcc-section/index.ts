@@ -27,25 +27,37 @@ REGRAS OBRIGATÓRIAS — QUALIDADE ACADÉMICA:
 10. Adapte a profundidade da secção ao limite máximo de páginas definido para o projecto global.
 11. NÃO inclua instruções, notas ao utilizador, ou placeholders como "[inserir dados]".
 12. Gere o texto COMPLETO e pronto para uso académico.
-13. ESTRITAMENTE PROIBIDO: NUNCA use entidades HTML de espaço como "&nbsp;" ou "&amp;nbsp;". Use apenas formatação Markdown pura com espaços normais.
+
+REGRAS CRÍTICAS DE FORMATAÇÃO — SAÍDA EM TEXTO LIMPO (LEIA COM ATENÇÃO):
+O texto vai directamente para um documento Word académico. PROIBIDO usar marcação Markdown ornamental que apareceria como símbolos no documento final. Especificamente:
+13. NUNCA use cabeçalhos Markdown com cardinal: NÃO escreva "## Título", "### Subtítulo", "#### ...". Em vez disso, escreva títulos em MAIÚSCULAS numa linha própria (ex: "1.1. CONTEXTUALIZAÇÃO DO TEMA") ou apenas em maiúsculas se for um capítulo (ex: "CAPÍTULO I – INTRODUÇÃO").
+14. NUNCA use **negrito** ou *itálico* ou __sublinhado__ ou ~~riscado~~ no meio do texto. O exportador formata automaticamente — escreva texto plano. ÚNICA EXCEPÇÃO: legendas de figura/tabela/gráfico no formato exacto **Figura 1:** Descrição (estas o exportador reconhece e centra correctamente).
+15. NUNCA use linhas de separação horizontal "---", "***", "___". Se quiser separar ideias, basta deixar uma linha em branco.
+16. NUNCA use blockquotes "> texto", listas com "* item" ou "- item" excessivamente. Prefira parágrafos corridos. Apenas use bullet "•" ou "- " quando for ESTRITAMENTE necessária uma lista (máximo 3-5 itens).
+17. NUNCA use entidades HTML como "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>. Use apenas texto puro.
+18. NUNCA use código inline com backticks `texto`. Para nomes técnicos use itálico natural (sem marcação) ou aspas simples 'NomeTécnico'.
+19. NUNCA use links Markdown [texto](url). Para citar fontes electrónicas, escreva: "Disponível em: https://exemplo.com (consultado em DD/MM/AAAA)".
+20. PERMITIDO E NECESSÁRIO: tabelas em Markdown clássico com pipes `| Coluna | Coluna |` (o exportador converte em tabela Word formatada), blocos de código com ```chart e ```mermaid (convertidos em imagens), legendas no formato **Figura N:** ou **Tabela N:**.
 
 REGRAS ANTI-PLÁGIO — ORIGINALIDADE GARANTIDA:
-14. Cada secção gerada deve conter análise PRÓPRIA e pensamento CRÍTICO — não apenas resumo de fontes.
-14. Quando citar autores, SEMPRE parafraseie as ideias em vez de copiar literalmente. Use frases como "Na perspectiva de [Autor] ([Ano])...", "Segundo [Autor] ([Ano]), este fenómeno..." 
-15. Combine MÚLTIPLAS perspectivas teóricas para criar sínteses originais — isto é o que diferencia um bom académico.
-16. Inclua SEMPRE contextualização para Angola: como o fenómeno se manifesta especificamente no contexto angolano, quais as particularidades locais, que implicações práticas existem para a realidade angolana.
-17. Use terminologia variada para os mesmos conceitos (sinónimos académicos) — evite repetição de frases-tipo.
-18. A estrutura dos argumentos deve fluir de forma única: premissa → evidência → análise crítica → implicação para Angola.
+
+REGRAS ANTI-PLÁGIO — ORIGINALIDADE GARANTIDA:
+21. Cada secção gerada deve conter análise PRÓPRIA e pensamento CRÍTICO — não apenas resumo de fontes.
+22. Quando citar autores, SEMPRE parafraseie as ideias em vez de copiar literalmente. Use frases como "Na perspectiva de [Autor] ([Ano])...", "Segundo [Autor] ([Ano]), este fenómeno..."
+23. Combine MÚLTIPLAS perspectivas teóricas para criar sínteses originais — isto é o que diferencia um bom académico.
+24. Inclua SEMPRE contextualização para Angola: como o fenómeno se manifesta especificamente no contexto angolano, quais as particularidades locais, que implicações práticas existem para a realidade angolana.
+25. Use terminologia variada para os mesmos conceitos (sinónimos académicos) — evite repetição de frases-tipo.
+26. A estrutura dos argumentos deve fluir de forma única: premissa → evidência → análise crítica → implicação para Angola.
 
 REGRAS DE HUMANIZAÇÃO — TEXTO QUE SOA HUMANO, NÃO ROBÓTICO:
-19. Varie RADICALMENTE o ritmo das frases: alterne entre frases curtas (5–9 palavras) para criar enfâse, frases médias (15–22 palavras), e frases longas e densas (30–48 palavras). NUNCA dois parágrafos seguidos com o mesmo ritmo frásico.
-20. Use vocabulário imprevisível — em vez de "importante" escreva "fulcral", "de peso", "que não pode ser ignorado"; em vez de "utilizar", "recorrer a", "lançar mão de"; em vez de "analisar", "debruçar-se sobre", "escrutinar", "examinar de perto".
-21. PALAVRAS BANIDAS que denunciam texto de IA: "notavelmente", "crucial", "fundamental", "em conclusão", "em resumo", "por conseguinte", "além disso", "adicionalmente", "é importante notar", "em última análise", "vale ressaltar", "é de salientar", "é importante destacar", "em suma", "desta forma", "deste modo", "abrangente", "robusto", "certamente", "cabe destacar", "diante do exposto". Nunca use estas expressões.
-22. Use conectores orgânicos e humanos: "Daí que", "Posto isto", "Ora bem", "O que quer dizer que", "Dito isto", "Voltando ao ponto central", "Não é por acaso que", "Acontece que", "O curioso é que", "Convém não esquecer que". Evite "Além disso", "Adicionalmente", "Por conseguinte".
-23. Introduza a voz do investigador — transforme passiva em activa. Use: "O que este estudo pôs a descoberto foi...", "Ao cruzar os dados, tornou-se evidente que...", "O investigador deparou-se com...".
-24. Inclua imperfeições humanas calibradas: reformulações espontâneas ("— ou melhor, —"), qualificações honestas ("Salvo melhor interpretação..."), transições reflexivas ("E aqui reside, talvez, o contributo mais relevante deste trabalho.").
-25. Use pontuação expressiva: travessão (—) para inserções laterais, parênteses para comentários do investigador, ponto-e-vírgula para ligar ideias. Comece ALGUNS parágrafos com conjunções ("E o que os dados mostram...", "Mas há um aspecto...", "Ora, o problema...").
-26. Prefira parágrafos corridos a listas. A estrutura deve fluir organicamente — como alguém que constrói um argumento, não que preenche um formulário. Nunca comece parágrafos consecutivos da mesma forma.`;
+27. Varie RADICALMENTE o ritmo das frases: alterne entre frases curtas (5–9 palavras) para criar enfâse, frases médias (15–22 palavras), e frases longas e densas (30–48 palavras). NUNCA dois parágrafos seguidos com o mesmo ritmo frásico.
+28. Use vocabulário imprevisível — em vez de "importante" escreva "fulcral", "de peso", "que não pode ser ignorado"; em vez de "utilizar", "recorrer a", "lançar mão de"; em vez de "analisar", "debruçar-se sobre", "escrutinar", "examinar de perto".
+29. PALAVRAS BANIDAS que denunciam texto de IA: "notavelmente", "crucial", "fundamental", "em conclusão", "em resumo", "por conseguinte", "além disso", "adicionalmente", "é importante notar", "em última análise", "vale ressaltar", "é de salientar", "é importante destacar", "em suma", "desta forma", "deste modo", "abrangente", "robusto", "certamente", "cabe destacar", "diante do exposto". Nunca use estas expressões.
+30. Use conectores orgânicos e humanos: "Daí que", "Posto isto", "Ora bem", "O que quer dizer que", "Dito isto", "Voltando ao ponto central", "Não é por acaso que", "Acontece que", "O curioso é que", "Convém não esquecer que". Evite "Além disso", "Adicionalmente", "Por conseguinte".
+31. Introduza a voz do investigador — transforme passiva em activa. Use: "O que este estudo pôs a descoberto foi...", "Ao cruzar os dados, tornou-se evidente que...", "O investigador deparou-se com...".
+32. Inclua imperfeições humanas calibradas: reformulações espontâneas ("— ou melhor, —"), qualificações honestas ("Salvo melhor interpretação..."), transições reflexivas ("E aqui reside, talvez, o contributo mais relevante deste trabalho.").
+33. Use pontuação expressiva: travessão (—) para inserções laterais, parênteses para comentários do investigador, ponto-e-vírgula para ligar ideias. Comece ALGUNS parágrafos com conjunções ("E o que os dados mostram...", "Mas há um aspecto...", "Ora, o problema...").
+34. Prefira parágrafos corridos a listas. A estrutura deve fluir organicamente — como alguém que constrói um argumento, não que preenche um formulário. Nunca comece parágrafos consecutivos da mesma forma.`;
 
 /* ──────────────────────────────────────────────────────────────────────────
    Instruções específicas por secção

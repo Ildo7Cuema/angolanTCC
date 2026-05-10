@@ -31,14 +31,31 @@ import {
 import { saveAs } from 'file-saver'
 import { supabase } from './supabase'
 import { getSectionsForProject } from './documentSections'
+import { sanitizeAIContent } from './sanitizeContent'
+import { getUniversityProfile, ACADEMIC_NORMS } from './universityProfiles'
 
-// ─── Constantes de Estilo ───────────────────────────────────────────────────
+// ─── Constantes de Estilo (defaults — podem ser sobrepostos pelo perfil) ──
 
 const FONT = 'Times New Roman'
 const FONT_SIZE = 24 // 12pt
 const FONT_SIZE_TITLE = 28 // 14pt
 const FONT_SIZE_HEADING = 26 // 13pt
 const FIRST_LINE_INDENT = convertMillimetersToTwip(12.7) // ≈ 1.25cm
+
+/**
+ * Espaçamento de linha conforme a norma académica.
+ * ABNT = 1.5  (360 twips), APA = 2.0 (480 twips), Vancouver = 2.0 (480 twips)
+ */
+function getLineSpacingForNorm(norm) {
+  switch (norm) {
+    case ACADEMIC_NORMS.APA:
+    case ACADEMIC_NORMS.VANCOUVER:
+      return 480
+    case ACADEMIC_NORMS.ABNT:
+    default:
+      return 360
+  }
+}
 
 // ─── Funções Auxiliares ─────────────────────────────────────────────────────
 
@@ -231,25 +248,35 @@ async function getQuickChartImage(chartConfig) {
   }
 }
 
-function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, universityCity = 'Luanda') {
+/**
+ * Gera Capa + Folha de Rosto de acordo com o perfil da universidade.
+ *
+ * @param {object} project       Projecto completo
+ * @param {ArrayBuffer|null} logoBuffer  Logo da universidade
+ * @param {number} LINE_SPACING  Espaçamento de linha em twips
+ * @param {object} profile       Perfil da universidade (de universityProfiles.js)
+ */
+function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, profile) {
   const elements = []
   const projectType = project?.sections?.projectType || 'tcc'
+  const universityCity = profile.city
+  const FONT_USE = profile.fontFamily || FONT
   const docType = projectType === 'anteprojecto'
     ? 'ANTE-PROJECTO DE PESQUISA'
-    : 'TRABALHO DE FIM DE CURSO — LICENCIATURA'
+    : `TRABALHO DE FIM DE CURSO — ${profile.degreeLabel || 'LICENCIATURA'}`
   const cityYear = `${universityCity}, ${project.year || new Date().getFullYear()}`
-  
-  // CAPA
-  // Header institucional
+
+  // ── CAPA ────────────────────────────────────────────────────────
+  // Cabeçalho institucional (configurável por universidade)
   elements.push(new Paragraph({
-    children: [new TextRun({ text: 'REPÚBLICA DE ANGOLA', bold: true, size: 22, font: FONT })],
+    children: [new TextRun({ text: profile.countryHeader, bold: true, size: 22, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 80 }
+    spacing: { after: 80 },
   }))
   elements.push(new Paragraph({
-    children: [new TextRun({ text: 'MINISTÉRIO DO ENSINO SUPERIOR, CIÊNCIA, TECNOLOGIA E INOVAÇÃO', bold: true, size: 20, font: FONT })],
+    children: [new TextRun({ text: profile.ministryHeader, bold: true, size: 20, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 400 }
+    spacing: { after: 400 },
   }))
 
   if (logoBuffer) {
@@ -257,106 +284,110 @@ function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, university
       children: [
         new ImageRun({
           data: logoBuffer,
-          transformation: { width: 130, height: 130 }
-        })
+          transformation: { width: 130, height: 130 },
+        }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { before: 200, after: 400 }
+      spacing: { before: 200, after: 400 },
     }))
   }
-  
+
   elements.push(new Paragraph({
-    children: [new TextRun({ text: project.university?.toUpperCase() || '', bold: true, size: 26, font: FONT })],
+    children: [new TextRun({ text: project.university?.toUpperCase() || '', bold: true, size: 26, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 120 }
+    spacing: { after: 120 },
   }))
 
   if (project.course) {
     elements.push(new Paragraph({
-      children: [new TextRun({ text: `Faculdade de ${project.course}`, size: 22, font: FONT })],
+      children: [new TextRun({ text: `${profile.facultyPrefix} ${project.course}`, size: 22, font: FONT_USE })],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 1200 }
+      spacing: { after: 1200 },
     }))
   }
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT })],
+    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 1800 }
+    spacing: { after: 1800 },
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT })],
+    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 1200 }
+    spacing: { after: 1200 },
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: docType, bold: true, size: 22, font: FONT, italics: true })],
+    children: [new TextRun({ text: docType, bold: true, size: 22, font: FONT_USE, italics: true })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 2000 }
+    spacing: { after: 2000 },
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT })],
+    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { before: 400 }
+    spacing: { before: 400 },
   }))
 
-  // FOLHA DE ROSTO
+  // ── FOLHA DE ROSTO ──────────────────────────────────────────────
   elements.push(new Paragraph({
-    text: "",
-    pageBreakBefore: true
-  }))
-
-  elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT })],
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 1800 }
+    text: '',
+    pageBreakBefore: true,
   }))
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT })],
+    children: [new TextRun({ text: (project.student_name || 'Nome do Estudante').toUpperCase(), bold: true, size: 26, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { after: 1800 }
+    spacing: { after: 1800 },
   }))
 
-  // Orientation block (right-aligned, left half indented)
+  elements.push(new Paragraph({
+    children: [new TextRun({ text: (project.title || 'Título do Trabalho').toUpperCase(), bold: true, size: 30, font: FONT_USE })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 1800 },
+  }))
+
+  // Texto de apresentação (varia conforme tipo + grau definido no perfil)
+  const degreeWord = (profile.degreeLabel || 'LICENCIATURA').toLowerCase() === 'bacharelato'
+    ? 'Bacharel'
+    : 'Licenciado'
   const orientationText = projectType === 'anteprojecto'
-    ? `Ante-Projecto de Pesquisa apresentado ao Departamento de ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a aprovação na disciplina de Metodologia de Investigação Científica.`
-    : `Trabalho de Conclusão de Curso apresentado ao Departamento de ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a obtenção do grau de Licenciado.`
+    ? `Ante-Projecto de Pesquisa apresentado ao ${profile.facultyPrefix} ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a aprovação na disciplina de Metodologia de Investigação Científica.`
+    : `Trabalho de Conclusão de Curso apresentado ao ${profile.facultyPrefix} ${project.course || '...'} da ${project.university || '...'} como requisito parcial para a obtenção do grau de ${degreeWord}.`
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: orientationText, size: 22, font: FONT })],
-    alignment: AlignmentType.LEFT,
+    children: [new TextRun({ text: orientationText, size: 22, font: FONT_USE })],
+    alignment: AlignmentType.JUSTIFIED,
     indent: { left: convertMillimetersToTwip(85) },
-    spacing: { line: LINE_SPACING, after: 800 }
+    spacing: { line: LINE_SPACING, after: 800 },
   }))
 
   if (project.advisor) {
     elements.push(new Paragraph({
-      children: [new TextRun({ text: `Orientador(a): ${project.advisor}`, size: 22, font: FONT })],
+      children: [new TextRun({ text: `Orientador(a): ${project.advisor}`, size: 22, font: FONT_USE })],
       alignment: AlignmentType.LEFT,
       indent: { left: convertMillimetersToTwip(85) },
-      spacing: { after: 3000 }
+      spacing: { after: 3000 },
     }))
   }
 
   elements.push(new Paragraph({
-    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT })],
+    children: [new TextRun({ text: cityYear, bold: true, size: 24, font: FONT_USE })],
     alignment: AlignmentType.CENTER,
-    spacing: { before: 1600 }
+    spacing: { before: 1600 },
   }))
 
   return elements
 }
 
-async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, universityCity = 'Luanda') {
+async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile) {
   const elements = []
+  const FONT_USE = profile?.fontFamily || FONT
 
   // Override da Capa
   if (sectionId === 'capa') {
-    return generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, universityCity)
+    return generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, profile)
   }
 
   const activeSections = getSectionsForProject(project?.sections?.projectType)
@@ -369,7 +400,7 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
         children: [
           new TextRun({
             text: sectionTitle,
-            font: FONT,
+            font: FONT_USE,
             size: FONT_SIZE_TITLE,
             bold: true,
             color: '000000',
@@ -378,23 +409,24 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
         alignment: AlignmentType.CENTER,
         spacing: { before: 600, after: 400, line: LINE_SPACING },
         heading: HeadingLevel.HEADING_1,
-        pageBreakBefore: true // Cada capítulo começa em nova página
+        pageBreakBefore: true,
       })
     )
   }
+
+  // Sanitiza ANTES de processar — remove ##, **inline**, ---, &nbsp; etc.
+  // mas preserva blocos chart/mermaid/tabelas e legendas **Figura X:**
+  const cleanContent = sanitizeAIContent(content || '')
 
   // Normaliza string para comparação (remove espaços duplos e variações de travessão)
   const normStr = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[–—-]/g, '-')
 
   // Filtra linhas duplicadas do título de capítulo que a IA inclui no conteúdo
-  // (o exportador já insere o título via sectionTitle, evitando duplicação no Word)
-  const rawLines = (content || '').split('\n')
+  const rawLines = cleanContent.split('\n')
   const lines = rawLines.filter((l, idx) => {
     if (!sectionTitle) return true
     const nl = normStr(l)
     const nt = normStr(sectionTitle)
-    // Remove a linha apenas se for exactamente o título, ou variante com "CAPÍTULO X –"
-    // e estiver nos primeiros 3 parágrafos não vazios do conteúdo
     const firstContent = rawLines.slice(0, idx).filter(x => x.trim()).length
     return !(nl === nt && firstContent < 4)
   })
@@ -432,14 +464,14 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
             )
           } else {
             elements.push(new Paragraph({
-              children: [new TextRun({ text: '[Erro ao gerar Gráfico]', font: FONT, size: FONT_SIZE, italics: true })],
+              children: [new TextRun({ text: '[Erro ao gerar Gráfico]', font: FONT_USE, size: FONT_SIZE, italics: true })],
               alignment: AlignmentType.CENTER,
               spacing: { before: 120, after: 120 }
             }))
           }
         } catch {
           elements.push(new Paragraph({
-            children: [new TextRun({ text: '[Configuração de gráfico inválida]', font: FONT, size: FONT_SIZE, italics: true })],
+            children: [new TextRun({ text: '[Configuração de gráfico inválida]', font: FONT_USE, size: FONT_SIZE, italics: true })],
             alignment: AlignmentType.CENTER
           }))
         }
@@ -470,7 +502,7 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
           )
         } else {
           elements.push(new Paragraph({
-            children: [new TextRun({ text: '[Erro ao gerar Diagrama]', font: FONT, size: FONT_SIZE, italics: true })],
+            children: [new TextRun({ text: '[Erro ao gerar Diagrama]', font: FONT_USE, size: FONT_SIZE, italics: true })],
             alignment: AlignmentType.CENTER
           }))
         }
@@ -504,9 +536,9 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     }
 
     // ── Legenda de figura/tabela (ex: **Figura 1:** ou **Tabela 2:**) ──────
-    if (/^\*\*(Figura|Tabela|Gráfico)\s*\d+/i.test(line)) {
+    if (/^\*\*(Figura|Tabela|Gráfico|Quadro|Diagrama)\s*\d+/i.test(line)) {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line.replace(/\*\*/g, ''), font: FONT, size: 20, bold: true, italics: true, color: '000000' })],
+        children: [new TextRun({ text: line.replace(/\*\*/g, ''), font: FONT_USE, size: 20, bold: true, italics: true, color: '000000' })],
         alignment: AlignmentType.CENTER,
         spacing: { before: 60, after: 200 }
       }))
@@ -516,7 +548,7 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     // ── Bullet point ───────────────────────────────────────────────────────
     if (line.startsWith('•') || line.startsWith('-  ') || line.startsWith('- ')) {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE })],
+        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE })],
         spacing: { line: LINE_SPACING, after: 60, before: 60 },
         indent: { left: convertMillimetersToTwip(10) },
       }))
@@ -526,26 +558,26 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     const heading = detectHeading(line)
     if (heading === 'chapter' || heading === 'upper') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_TITLE, bold: true, color: '000000' })],
+        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE_TITLE, bold: true, color: '000000' })],
         alignment: AlignmentType.LEFT,
         spacing: { line: LINE_SPACING, before: 360, after: 200 },
         heading: HeadingLevel.HEADING_1,
       }))
     } else if (heading === 'sub1') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE_HEADING, bold: true, color: '000000' })],
+        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE_HEADING, bold: true, color: '000000' })],
         spacing: { line: LINE_SPACING, before: 240, after: 120 },
         heading: HeadingLevel.HEADING_2,
       }))
     } else if (heading === 'sub2' || heading === 'sub3') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE, bold: true, italics: heading === 'sub3', color: '000000' })],
+        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE, bold: true, italics: heading === 'sub3', color: '000000' })],
         spacing: { line: LINE_SPACING, before: 200, after: 100 },
         heading: HeadingLevel.HEADING_3,
       }))
     } else {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT, size: FONT_SIZE })],
+        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE })],
         alignment: AlignmentType.JUSTIFIED,
         spacing: { line: LINE_SPACING, after: 100 },
         indent: { firstLine: FIRST_LINE_INDENT },
@@ -578,17 +610,23 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
 
 export async function exportToDocx(project, sections) {
   const allElements = []
-  
-  // Define active sections based on projectType
+
+  // Secções activas conforme tipo (TCC vs Ante-Projecto)
   const activeSections = getSectionsForProject(project?.sections?.projectType)
 
-  // Define espaçamento por norma
-  const academicNorm = project?.sections?.academic_norm || 'ABNT'
-  // ABNT = 1.5 spacing (360 twips), APA = 2.0 spacing (480 twips)
-  const LINE_SPACING = academicNorm === 'APA' ? 480 : 360
+  // Resolve perfil da universidade — define norma, cidade, prefixo de
+  // faculdade, fonte e estilo de capa específicos da instituição.
+  const profile = getUniversityProfile(project?.university, {
+    course: project?.course,
+    cityOverride: project?.sections?.university_city,
+  })
+
+  // Norma vem ou da escolha explícita do utilizador, ou do perfil
+  const academicNorm = project?.sections?.academic_norm || profile.defaultNorm
+  const LINE_SPACING = getLineSpacingForNorm(academicNorm)
+  const FONT_USE = profile.fontFamily || FONT
 
   let logoBuffer = null
-  let universityCity = 'Luanda' // default
 
   if (project?.university) {
     try {
@@ -598,12 +636,12 @@ export async function exportToDocx(project, sections) {
         .eq('name', project.university)
         .limit(1)
         .single()
-        
-      // Use city from DB if available
+
+      // Cidade do BD tem precedência sobre o perfil estático
       if (uniData?.city) {
-        universityCity = uniData.city
+        profile.city = uniData.city
       } else if (uniData?.province) {
-        universityCity = uniData.province
+        profile.city = uniData.province
       }
 
       if (uniData?.logo_url) {
@@ -639,18 +677,18 @@ export async function exportToDocx(project, sections) {
     const content = sections?.[sectionId]
     if (!content && sectionId !== 'capa') continue // Capa é gerada independente
 
-    const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, universityCity)
+    const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile)
     allElements.push(...elements)
   }
 
   const doc = new Document({
     creator: project?.student_name || 'AngolanTCC AI',
     title: project?.title || 'Trabalho de Conclusão de Curso',
-    description: `TCC — ${project?.title || 'Sem título'}`,
+    description: `TCC — ${project?.title || 'Sem título'} (${academicNorm})`,
     styles: {
       default: {
         document: {
-          run: { font: FONT, size: FONT_SIZE, color: '000000' },
+          run: { font: FONT_USE, size: FONT_SIZE, color: '000000' },
           paragraph: {
             spacing: { line: LINE_SPACING },
             alignment: AlignmentType.JUSTIFIED,
@@ -681,7 +719,7 @@ export async function exportToDocx(project, sections) {
                 children: [
                   new TextRun({
                     text: project?.title || '',
-                    font: FONT,
+                    font: FONT_USE,
                     size: 18,
                     italics: true,
                     color: '999999',
@@ -699,7 +737,7 @@ export async function exportToDocx(project, sections) {
                 children: [
                   new TextRun({
                     children: [PageNumber.CURRENT],
-                    font: FONT,
+                    font: FONT_USE,
                     size: FONT_SIZE,
                   }),
                 ],

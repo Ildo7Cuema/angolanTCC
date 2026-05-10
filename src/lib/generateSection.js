@@ -4,6 +4,7 @@
  * Chama a Edge Function `generate-tcc-section` para gerar uma secção por vez.
  */
 import { supabase } from './supabase'
+import { sanitizeAIContent } from './sanitizeContent'
 
 /**
  * Extrai a mensagem de erro de um FunctionsError do Supabase.
@@ -100,7 +101,7 @@ export async function generateSection(sectionId, projectData) {
     for (const subId of subParts) {
       const data = await callFunction('generate-tcc-section', { sectionId: subId, projectData })
       if (data?.text) {
-        parts.push(data.text)
+        parts.push(sanitizeAIContent(data.text))
       }
     }
     if (parts.length === 0) {
@@ -115,7 +116,7 @@ export async function generateSection(sectionId, projectData) {
     throw new Error('Resposta vazia da IA. Tente novamente.')
   }
 
-  return data.text
+  return sanitizeAIContent(data.text)
 }
 
 /**
@@ -132,7 +133,70 @@ export async function humanizeSection(sectionId, textToHumanize) {
     throw new Error('Resposta vazia da IA. Tente novamente.')
   }
 
-  return data.text
+  return sanitizeAIContent(data.text)
+}
+
+/**
+ * Resume uma secção do TCC usando IA.
+ *
+ * Útil para criar versões mais curtas de TCCs muito longos (>90 páginas).
+ *
+ * @param {string} sectionId  – ID da secção
+ * @param {string} originalText – Texto original (pode ser longo)
+ * @param {object} options    – { level: 'compact' | 'medium' | 'light', targetWords?: number }
+ * @returns {Promise<string>} – Texto resumido (ainda académico)
+ */
+export async function summarizeSection(sectionId, originalText, options = {}) {
+  const data = await callFunction('summarize-tcc-section', {
+    sectionId,
+    originalText,
+    level: options.level || 'medium',
+    targetWords: options.targetWords,
+  })
+
+  if (!data?.text) {
+    throw new Error('Resposta vazia da IA ao resumir. Tente novamente.')
+  }
+
+  return sanitizeAIContent(data.text)
+}
+
+/**
+ * Resume múltiplas secções sequencialmente, com callback de progresso.
+ * Mantém capa, índice, dedicatória, agradecimentos, abstract e referências
+ * SEM resumir (são curtos por natureza ou imprescindíveis na íntegra).
+ *
+ * @param {Record<string,string>} sections – Mapa sectionId → texto original
+ * @param {object} options                  – { level, onProgress, onError }
+ * @returns {Promise<Record<string,string>>} – Mapa com secções resumidas
+ */
+const SECTIONS_NOT_TO_SUMMARIZE = new Set([
+  'capa', 'dedicatoria', 'agradecimentos',
+  'resumo', 'abstract', 'indice', 'referencias',
+  'cronograma', 'orcamento',
+])
+
+export async function summarizeAllSections(sections, options = {}) {
+  const { level = 'medium', onProgress, onError } = options
+  const sectionIds = Object.keys(sections).filter((id) => sections[id])
+  const summarizable = sectionIds.filter((id) => !SECTIONS_NOT_TO_SUMMARIZE.has(id))
+  const total = summarizable.length
+  const result = { ...sections }
+
+  for (let i = 0; i < summarizable.length; i++) {
+    const sectionId = summarizable[i]
+    try {
+      const summarized = await summarizeSection(sectionId, sections[sectionId], { level })
+      result[sectionId] = summarized
+      onProgress?.(sectionId, summarized, i, total)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      onError?.(sectionId, message, i)
+      // Mantém versão original se o resumo falhar
+    }
+  }
+
+  return result
 }
 
 /**

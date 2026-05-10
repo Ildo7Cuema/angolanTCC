@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import { supabase } from '../lib/supabase'
 import { callFunction, traduzirErroIA as traduzirErroIALib } from '../lib/generateSection'
+import { suggestNormForUniversity, NORM_OPTIONS, getUniversityProfile } from '../lib/universityProfiles'
 import {
   Sparkles, BookOpen, GraduationCap, Building2, User, FileText, Lightbulb,
   RefreshCw, Wand2, CheckCircle2, ClipboardList, ChevronDown, X, Layers, ArrowRight,
@@ -144,6 +145,9 @@ export default function NewProject() {
 
   const [dbUniversities, setDbUniversities] = useState([])
   const [universityCityMap, setUniversityCityMap] = useState({})
+  // Indica se o utilizador editou manualmente a norma — se SIM, não a
+  // sobrescrevemos automaticamente quando a universidade/curso mudarem.
+  const [normManuallyChanged, setNormManuallyChanged] = useState(false)
 
   useEffect(() => {
     async function fetchUniversities() {
@@ -161,7 +165,24 @@ export default function NewProject() {
     fetchUniversities()
   }, [])
 
+  // Auto-sugere a norma com base na universidade + curso seleccionados
+  // (só se o utilizador ainda não a tiver alterado manualmente).
+  useEffect(() => {
+    if (normManuallyChanged) return
+    if (!form.university && !form.course) return
+    const suggested = suggestNormForUniversity(form.university, form.course)
+    if (suggested && suggested !== form.academicNorm) {
+      setForm((prev) => ({ ...prev, academicNorm: suggested }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.university, form.course])
+
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
+
+  // Perfil da universidade actualmente seleccionada (para mostrar info no UI)
+  const currentProfile = form.university
+    ? getUniversityProfile(form.university, { course: form.course })
+    : null
 
   // ─── AI: Tema + Problema (a partir do título) ──────────────────────────
   const generateWithAI = useCallback(async (title) => {
@@ -649,17 +670,33 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-dark-700 mb-1.5">
-                    Norma académica <span className="text-danger-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5 gap-2">
+                    <label className="block text-sm font-medium text-dark-700">
+                      Norma académica <span className="text-danger-500">*</span>
+                    </label>
+                    {currentProfile && currentProfile.defaultNorm === form.academicNorm && !normManuallyChanged && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary-700 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-200">
+                        <Sparkles className="w-2.5 h-2.5" /> Sugerida
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={form.academicNorm}
-                    onChange={(e) => updateField('academicNorm', e.target.value)}
+                    onChange={(e) => {
+                      updateField('academicNorm', e.target.value)
+                      setNormManuallyChanged(true)
+                    }}
                     className="input-field"
                   >
-                    <option value="ABNT">ABNT (recomendado)</option>
-                    <option value="APA">APA</option>
+                    {NORM_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
+                  {currentProfile && (
+                    <p className="text-[11px] text-dark-500 mt-1">
+                      {form.university} usa habitualmente <strong className="text-dark-700">{currentProfile.defaultNorm}</strong> e segue o modelo de capa próprio.
+                    </p>
+                  )}
                 </div>
                 <Input
                   label="Ano"

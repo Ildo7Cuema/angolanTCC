@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 /**
  * Tabs — controlado ou não-controlado.
@@ -24,6 +24,10 @@ export default function Tabs({
 }) {
   const [internal, setInternal] = useState(defaultValue ?? tabs[0]?.id)
   const active = value ?? internal
+  // ID único por instância — evita colisão de `layoutId` quando há vários
+  // <Tabs> simultâneos no mesmo viewport (caso contrário o Framer Motion
+  // tenta animar a mesma "pílula" entre componentes diferentes).
+  const layoutKey = useId()
 
   const handleClick = (id) => {
     if (value === undefined) setInternal(id)
@@ -55,7 +59,7 @@ export default function Tabs({
                 {t.label}
                 {isActive && (
                   <motion.span
-                    layoutId="tab-underline"
+                    layoutId={`tab-underline-${layoutKey}`}
                     className="absolute -bottom-px left-2 right-2 h-0.5 bg-primary-600 rounded-full"
                     transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   />
@@ -97,7 +101,7 @@ export default function Tabs({
           >
             {isActive && (
               <motion.span
-                layoutId="tab-pill"
+                layoutId={`tab-pill-${layoutKey}`}
                 className="absolute inset-0 rounded-lg bg-white shadow-sm border border-dark-200/40"
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}
               />

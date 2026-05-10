@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -49,13 +49,18 @@ function PublicRoute({ children }) {
 
 /**
  * AppShell — combina rotas + page transitions + suspense para lazy chunks.
+ *
+ * O `PageTransition` (interno) já obtém a `useLocation()` e usa-a como
+ * `key` da `motion.div` para animar entre rotas. Aqui não passamos
+ * `location`/`key` ao <Routes> de propósito — duplicar isso causa
+ * remount em cascata do Suspense quando combinado com lazy() e gera
+ * warnings em modo Strict.
  */
 function AppShell() {
-  const location = useLocation()
   return (
-    <PageTransition>
-      <Suspense fallback={<FullscreenLoader />}>
-        <Routes location={location} key={location.pathname}>
+    <Suspense fallback={<FullscreenLoader />}>
+      <PageTransition>
+        <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
@@ -66,8 +71,8 @@ function AppShell() {
           <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
-    </PageTransition>
+      </PageTransition>
+    </Suspense>
   )
 }
 

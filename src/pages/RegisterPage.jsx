@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { GraduationCap, Mail, Lock, User, ArrowRight, Heart, Users, Sparkles } from 'lucide-react'
@@ -21,7 +21,6 @@ export default function RegisterPage() {
   const [otherRelatives, setOtherRelatives] = useState('')
   const [loading, setLoading] = useState(false)
   const { signUp } = useAuth()
-  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -37,13 +36,14 @@ export default function RegisterPage() {
     const { error } = await signUp(email, password, fullName, {
       fatherName, motherName, otherRelatives,
     })
-    setLoading(false)
     if (error) {
-      toast.error(error.message)
-    } else {
-      toast.success('Conta criada com sucesso!')
-      navigate('/dashboard')
+      setLoading(false)
+      toast.error(error.message || 'Falha ao criar conta.')
+      return
     }
+    toast.success('Conta criada com sucesso!')
+    // Sem `navigate('/dashboard')` aqui — o `PublicRoute` redirecciona
+    // automaticamente quando o `onAuthStateChange` actualizar o `user`.
   }
 
   return (

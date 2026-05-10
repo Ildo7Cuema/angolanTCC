@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { GraduationCap, Mail, Lock, ArrowRight, Sparkles, Shield, Zap, BookOpen } from 'lucide-react'
@@ -24,7 +24,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
-  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -34,15 +33,21 @@ export default function LoginPage() {
     }
     setLoading(true)
     const { error } = await signIn(email, password)
-    setLoading(false)
     if (error) {
-      toast.error(error.message === 'Invalid login credentials'
-        ? 'Email ou senha incorrectos.'
-        : error.message)
-    } else {
-      toast.success('Bem-vindo de volta!')
-      navigate('/dashboard')
+      setLoading(false)
+      toast.error(
+        error.message === 'Invalid login credentials'
+          ? 'Email ou senha incorrectos.'
+          : (error.message || 'Falha ao iniciar sessão.'),
+      )
+      return
     }
+    toast.success('Bem-vindo de volta!')
+    // Não chamamos `navigate('/dashboard')` aqui de propósito: o `PublicRoute`
+    // detecta `user` actualizado pelo `onAuthStateChange` e redirecciona
+    // automaticamente. Chamar `navigate` em paralelo causa o warning
+    // "Cannot update a component (`BrowserRouter`) while rendering …"
+    // e pode disparar erros no console em modo Strict + Suspense.
   }
 
   return (

@@ -36,7 +36,23 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all') // all | tcc | anteprojecto | completed
 
-  useEffect(() => { fetchProjects() }, [])
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      if (!user?.id) { setLoading(false); return }
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      if (error) toast.error(`Erro ao carregar projectos: ${error.message}`)
+      else setProjects(data || [])
+      setLoading(false)
+    }
+    run()
+    return () => { cancelled = true }
+  }, [user?.id])
 
   const fetchProjects = async () => {
     if (!user?.id) { setLoading(false); return }
@@ -46,11 +62,8 @@ export default function Dashboard() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      toast.error(`Erro ao carregar projectos: ${error.message}`)
-    } else {
-      setProjects(data || [])
-    }
+    if (error) toast.error(`Erro ao carregar projectos: ${error.message}`)
+    else setProjects(data || [])
     setLoading(false)
   }
 
@@ -64,7 +77,8 @@ export default function Dashboard() {
     new Date(s).toLocaleDateString('pt-AO', { day: '2-digit', month: 'short', year: 'numeric' })
 
   const isAnteProjecto = (p) => p.sections?.projectType === 'anteprojecto'
-  const hasMigratedTCC = (apId) => projects.some((p) => p.source_project_id === apId)
+  const isSummary      = (p) => !!p.sections?.is_summary
+  const hasMigratedTCC = (apId) => projects.some((p) => p.source_project_id === apId && !p.sections?.is_summary)
 
   const stats = useMemo(() => {
     const total       = projects.length
@@ -273,14 +287,16 @@ export default function Dashboard() {
           >
             {visibleProjects.map((project, i) => {
               const ap = isAnteProjecto(project)
+              const summary = isSummary(project)
               const alreadyMigrated = hasMigratedTCC(project.id)
-              const isMigratedTCC = !ap && project.source_project_id
+              const isMigratedTCC = !ap && !summary && project.source_project_id
 
-              const tone = ap ? 'amber' : isMigratedTCC ? 'emerald' : 'primary'
+              const tone = summary ? 'rose' : ap ? 'amber' : isMigratedTCC ? 'emerald' : 'primary'
               const toneCls = {
                 amber:    { bg: 'bg-amber-50',    fg: 'text-amber-600',    ring: 'ring-amber-100' },
                 emerald:  { bg: 'bg-emerald-50',  fg: 'text-emerald-600',  ring: 'ring-emerald-100' },
                 primary:  { bg: 'bg-primary-50',  fg: 'text-primary-600',  ring: 'ring-primary-100' },
+                rose:     { bg: 'bg-rose-50',     fg: 'text-rose-600',     ring: 'ring-rose-100' },
               }[tone]
 
               return (
@@ -309,8 +325,10 @@ export default function Dashboard() {
                       </div>
 
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={`badge ${ap ? 'badge-warning' : isMigratedTCC ? 'badge-success' : 'badge-info'}`}>
-                          {ap ? 'Ante-Projecto' : isMigratedTCC ? 'TCC (migrado)' : 'TCC'}
+                        <span className={`badge ${summary ? 'bg-rose-50 text-rose-700 border-rose-200' : ap ? 'badge-warning' : isMigratedTCC ? 'badge-success' : 'badge-info'}`}>
+                          {summary
+                            ? `Resumo · ${project.sections?.summary_level === 'compact' ? 'Compacto' : project.sections?.summary_level === 'light' ? 'Suave' : 'Médio'}`
+                            : ap ? 'Ante-Projecto' : isMigratedTCC ? 'TCC (migrado)' : 'TCC'}
                         </span>
                         {statusBadge(project.status)}
                         <span className="text-[11px] text-dark-400 inline-flex items-center gap-1 ml-auto">
@@ -319,7 +337,7 @@ export default function Dashboard() {
                         </span>
                       </div>
 
-                      {ap && !alreadyMigrated && (
+                      {ap && !alreadyMigrated && !summary && (
                         <div className="mt-3">
                           <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMigrating(project) }}
@@ -330,8 +348,13 @@ export default function Dashboard() {
                           </button>
                         </div>
                       )}
-                      {ap && alreadyMigrated && (
+                      {ap && alreadyMigrated && !summary && (
                         <span className="mt-1.5 text-xs text-dark-400 block">Já migrado</span>
+                      )}
+                      {summary && (
+                        <span className="mt-1.5 text-xs text-rose-500 block">
+                          Versão resumida do projecto original
+                        </span>
                       )}
                     </div>
                   </Link>

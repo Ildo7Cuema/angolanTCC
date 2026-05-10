@@ -93,7 +93,22 @@ REGRAS ABSOLUTAS — SEM EXCEPÇÃO
 6. Nunca dois parágrafos seguidos com estrutura sintáctica idêntica.
 7. Nunca começas parágrafos consecutivos da mesma forma.
 8. O resultado deve ter extensão igual ou superior ao original — nunca mais curto.
-9. Devolves APENAS o texto reescrito — sem saudações, notas explicativas, comentários sobre o processo ou prefácios.`;
+9. Devolves APENAS o texto reescrito — sem saudações, notas explicativas, comentários sobre o processo ou prefácios.
+
+════════════════════════════════════════════════
+REGRAS CRÍTICAS DE FORMATAÇÃO — TEXTO LIMPO
+════════════════════════════════════════════════
+
+10. NUNCA introduzas marcação Markdown ornamental no texto reescrito. Especificamente PROIBIDO:
+    - Cabeçalhos com cardinal: "## Título", "### Subtítulo", "#### ..." → escreve em MAIÚSCULAS na linha (ex: "1.1. CONTEXTUALIZAÇÃO")
+    - Negrito **texto** ou itálico *texto* ou __sublinhado__ ou ~~riscado~~ no meio do texto
+    - Linhas de separação "---", "***", "___"
+    - Entidades HTML: "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>
+    - Código inline com backticks `texto`
+    - Links Markdown [texto](url) — escreve URL natural: "Disponível em: https://..."
+    - Blockquotes "> texto"
+11. Se o texto original tiver legendas no formato "**Figura 1:** Descrição" ou "**Tabela 1:** ...", PRESERVA esse formato exacto (são marcadores que o exportador reconhece).
+12. Se o texto original tiver tabelas em pipes Markdown "| col | col |" ou blocos ```chart / ```mermaid, PRESERVA-OS INTEGRALMENTE — não alteres uma única letra dentro destes blocos.`;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {

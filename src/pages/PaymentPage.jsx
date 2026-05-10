@@ -231,7 +231,7 @@ export default function PaymentPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => { navigator.clipboard.writeText('0040000017357484101015'); toast.success('IBAN copiado') }}
+                        onClick={() => { navigator.clipboard.writeText('004000001735748410115'); toast.success('IBAN copiado') }}
                         className="btn-icon flex-shrink-0"
                         aria-label="Copiar IBAN"
                       >

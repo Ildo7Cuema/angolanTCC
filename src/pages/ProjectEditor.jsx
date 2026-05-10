@@ -3,18 +3,20 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { generateSection, generateAllSections, traduzirErroIA, humanizeSection } from '../lib/generateSection'
+import { generateSection, generateAllSections, traduzirErroIA, humanizeSection, summarizeAllSections } from '../lib/generateSection'
 import { exportToDocx } from '../lib/exportDocx'
+import { sanitizeAIContent } from '../lib/sanitizeContent'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Download, RefreshCw, Sparkles, ChevronRight, Edit3, Check, X,
   Copy, Trash2, FileDown, Loader2, AlertCircle, CheckCircle2, Wand2, Menu,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, FileMinus2, Zap, Gauge, Feather,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getSectionsForProject } from '../lib/documentSections'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
+import Modal from '../components/Modal'
 
 const fadeUp = {
   hidden:  { opacity: 0, y: 8 },
@@ -177,8 +179,12 @@ function MarkdownTablePreview({ lines }) {
 }
 
 // ─── Parser de conteúdo ──────────────────────────────────────────────────
-function parseSectionContent(content, onChartTypeChange) {
-  if (!content) return []
+function parseSectionContent(rawContent, onChartTypeChange) {
+  if (!rawContent) return []
+  // Defesa em camadas: sanitiza ANTES de renderizar para garantir que
+  // qualquer ##, ---, **inline**, &nbsp; que tenha escapado dos prompts
+  // não apareça como símbolo cru no editor.
+  const content = sanitizeAIContent(rawContent)
   const lines = content.split('\n')
   const elements = []
   let i = 0
@@ -278,6 +284,12 @@ export default function ProjectEditor() {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const textareaRef = useRef(null)
+
+  // ─── Estado da feature de RESUMIR TRABALHO ────────────────────
+  const [showSummarizeModal, setShowSummarizeModal] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
+  const [summarizeProgress, setSummarizeProgress] = useState({ done: 0, total: 0, current: '' })
+  const [summarizeLevel, setSummarizeLevel] = useState('medium') // compact | medium | light
 
   // ─── Fetch ─────────────────────────────────────────────────────────────
   const fetchProject = useCallback(async () => {
@@ -443,6 +455,98 @@ export default function ProjectEditor() {
     setExporting(false)
   }
 
+  // ─── Resumir Trabalho ──────────────────────────────────────────────────
+  // Cria um NOVO projecto (preservando o original) com as secções
+  // resumidas pela IA. O novo projecto fica ligado ao original via
+  // `source_project_id` para se rastreabilidade.
+  const handleSummarize = async () => {
+    if (!project?.sections || Object.keys(project.sections).length === 0) {
+      toast.error('Gere o TCC antes de resumir.')
+      return
+    }
+    setSummarizing(true)
+    setSummarizeProgress({ done: 0, total: 0, current: '' })
+
+    // Conta apenas as secções que serão resumidas
+    const summarizableIds = Object.keys(project.sections).filter(
+      (id) => typeof project.sections[id] === 'string' && project.sections[id].trim().length > 0,
+    )
+    setSummarizeProgress({ done: 0, total: summarizableIds.length, current: '' })
+
+    try {
+      const summarized = await summarizeAllSections(
+        project.sections,
+        {
+          level: summarizeLevel,
+          onProgress: (sectionId, _text, index, total) => {
+            const def = activeSections.find((s) => s.id === sectionId)
+            setSummarizeProgress({ done: index + 1, total, current: def?.title || sectionId })
+          },
+          onError: (sectionId, errMsg) => {
+            const def = activeSections.find((s) => s.id === sectionId)
+            toast.error(`Falha ao resumir "${def?.title || sectionId}": ${traduzirErroIA(errMsg)}`)
+          },
+        },
+      )
+
+      // Cria um novo projecto resumido — preserva o original
+      const summaryTag = summarizeLevel === 'compact'
+        ? '[Compacto]'
+        : summarizeLevel === 'light' ? '[Leve]' : '[Médio]'
+      const newTitle = `${project.title} — Resumo ${summaryTag}`
+
+      const { data: newProject, error: insertErr } = await supabase
+        .from('projects')
+        .insert({
+          user_id: user.id,
+          title: newTitle.slice(0, 200),
+          university: project.university,
+          course: project.course,
+          student_name: project.student_name,
+          advisor: project.advisor,
+          topic: project.topic,
+          problem_statement: project.problem_statement,
+          methodology: project.methodology,
+          year: project.year,
+          max_pages: Math.max(15, Math.round((project.max_pages || 80) * 0.5)),
+          status: 'completed',
+          source_project_id: project.id,
+          sections: {
+            ...project.sections,
+            ...summarized,
+            is_summary: true,
+            summary_level: summarizeLevel,
+            summarized_from: project.id,
+          },
+        })
+        .select()
+        .single()
+
+      if (insertErr || !newProject) {
+        toast.error(`Erro ao salvar projecto resumido: ${insertErr?.message || 'Tente novamente'}`)
+      } else {
+        // Cria entrada de pagamento já como "pago" (resumo derivado de
+        // projecto pago — não cobramos extra)
+        const refCode = 'RES-' + Math.random().toString(36).substring(2, 7).toUpperCase()
+        await supabase.from('payments').insert({
+          user_id: user.id,
+          project_id: newProject.id,
+          amount: 0,
+          reference_code: refCode,
+          status: 'pago',
+        })
+        toast.success('Resumo criado com sucesso! A abrir...')
+        setShowSummarizeModal(false)
+        navigate(`/project/${newProject.id}`)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`Erro ao resumir: ${traduzirErroIA(msg)}`)
+    }
+    setSummarizing(false)
+    setSummarizeProgress({ done: 0, total: 0, current: '' })
+  }
+
   const handleDownloadTxt = () => {
     const allContent = activeSections.map(
       (s) => `\n\n${'='.repeat(60)}\n${s.title.toUpperCase()}\n${'='.repeat(60)}\n\n${project?.sections?.[s.id] || '(Conteúdo não gerado)'}`
@@ -566,8 +670,18 @@ export default function ProjectEditor() {
             </Button>
 
             <button
+              onClick={() => setShowSummarizeModal(true)}
+              disabled={generating || exporting || summarizing}
+              className="h-9 px-3 rounded-lg hidden sm:flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all disabled:opacity-50"
+              title="Resumir trabalho (cria nova versão condensada)"
+            >
+              {summarizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileMinus2 className="w-3.5 h-3.5" />}
+              Resumir
+            </button>
+
+            <button
               onClick={handleDownloadTxt}
-              className="btn-secondary h-9 px-3 rounded-lg hidden sm:flex items-center gap-1.5 text-xs"
+              className="btn-secondary h-9 px-3 rounded-lg hidden lg:flex items-center gap-1.5 text-xs"
               title="Descarregar TXT"
             >
               <Download className="w-3.5 h-3.5" />
@@ -798,6 +912,122 @@ export default function ProjectEditor() {
         onConfirm={confirmDeleteProject}
         onCancel={() => setShowDeleteDialog(false)}
       />
+
+      {/* Modal Resumir Trabalho */}
+      <Modal
+        open={showSummarizeModal}
+        onClose={() => !summarizing && setShowSummarizeModal(false)}
+        title="Resumir trabalho"
+        maxWidth="max-w-lg"
+        dismissible={!summarizing}
+        icon={
+          <div className="w-11 h-11 rounded-2xl bg-amber-50 ring-1 ring-amber-100 text-amber-600 flex items-center justify-center">
+            <FileMinus2 className="w-5 h-5" />
+          </div>
+        }
+      >
+        {!summarizing ? (
+          <>
+            <p className="text-sm text-dark-600 leading-relaxed mb-5">
+              Cria uma <strong className="text-dark-900">versão condensada</strong> deste {project?.sections?.projectType === 'anteprojecto' ? 'ante-projecto' : 'TCC'},
+              ideal quando o trabalho ultrapassa 80–90 páginas. As citações,
+              tabelas, gráficos e estrutura ficam preservados.
+              O original NÃO é alterado — abre-se um novo projecto com o resumo.
+            </p>
+
+            <p className="text-xs font-semibold text-dark-700 uppercase tracking-wider mb-2">
+              Nível de resumo
+            </p>
+            <div className="space-y-2 mb-5">
+              {[
+                { id: 'light',   icon: Feather, label: 'Suave',     desc: '~70% do tamanho original — só remove redundâncias' },
+                { id: 'medium',  icon: Gauge,   label: 'Médio',     desc: '~50% do tamanho original — equilibrado, recomendado' },
+                { id: 'compact', icon: Zap,     label: 'Compacto',  desc: '~30% do tamanho original — resumo agressivo (executivo)' },
+              ].map((opt) => {
+                const Icon = opt.icon
+                const active = summarizeLevel === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSummarizeLevel(opt.id)}
+                    className={[
+                      'w-full text-left flex items-start gap-3 p-3.5 rounded-2xl border-2 transition-all',
+                      active
+                        ? 'border-primary-500 bg-primary-50/60'
+                        : 'border-dark-200/70 bg-white hover:border-dark-300',
+                    ].join(' ')}
+                  >
+                    <span className={[
+                      'w-9 h-9 rounded-xl flex items-center justify-center ring-1 flex-shrink-0',
+                      active ? 'bg-primary-600 text-white ring-primary-300' : 'bg-dark-100 text-dark-600 ring-dark-200',
+                    ].join(' ')}>
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-bold text-dark-900 text-sm">{opt.label}</span>
+                        {active && <CheckCircle2 className="w-4 h-4 text-primary-600" />}
+                      </div>
+                      <p className="text-xs text-dark-500 mt-0.5">{opt.desc}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-5">
+              <strong>Nota:</strong> Capa, índice, dedicatória, agradecimentos, resumo, abstract e
+              referências bibliográficas ficam preservados na íntegra (são curtos por natureza).
+              Apenas as secções analíticas (introdução, revisão, metodologia, resultados, conclusão, etc.) são condensadas.
+            </div>
+
+            <div className="flex gap-2.5">
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => setShowSummarizeModal(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                fullWidth
+                leftIcon={Sparkles}
+                onClick={handleSummarize}
+              >
+                Resumir
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="py-6 text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-50 to-primary-50 ring-1 ring-amber-100 flex items-center justify-center">
+              <FileMinus2 className="w-8 h-8 text-amber-600 animate-pulse" />
+            </div>
+            <h3 className="font-display font-bold text-dark-900 text-lg">
+              A resumir o trabalho…
+            </h3>
+            <p className="text-sm text-dark-500">
+              {summarizeProgress.current
+                ? <>Secção actual: <strong className="text-dark-900">{summarizeProgress.current}</strong></>
+                : 'A iniciar…'}
+            </p>
+            <div className="w-full h-2 bg-dark-100 rounded-full overflow-hidden ring-1 ring-dark-100">
+              <div
+                className="h-full bg-gradient-to-r from-amber-500 to-primary-600 rounded-full transition-all duration-500"
+                style={{ width: `${summarizeProgress.total > 0 ? (summarizeProgress.done / summarizeProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="text-xs text-dark-500">
+              {summarizeProgress.done} de {summarizeProgress.total} secções
+            </p>
+            <p className="text-xs text-dark-400 italic max-w-sm mx-auto">
+              Pode demorar alguns minutos. As citações, tabelas e gráficos são preservados.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
