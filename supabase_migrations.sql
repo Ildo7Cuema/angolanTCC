@@ -213,7 +213,9 @@ BEGIN
 END;
 $$;
 
--- Access statistics function (daily/monthly/yearly login counts)
+-- Access statistics function — UTILIZADORES ÚNICOS por dia/mês/ano
+-- (count DISTINCT user_id, para não inflar a métrica quando o mesmo
+-- utilizador faz login várias vezes no mesmo período).
 CREATE OR REPLACE FUNCTION public.get_access_stats()
 RETURNS json
 LANGUAGE plpgsql
@@ -229,26 +231,30 @@ BEGIN
     RAISE EXCEPTION 'Acesso negado';
   END IF;
 
-  SELECT count(*) INTO today_count
+  SELECT count(DISTINCT user_id) INTO today_count
     FROM public.login_logs
-    WHERE logged_at >= date_trunc('day', now() AT TIME ZONE 'UTC');
+    WHERE logged_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+      AND user_id IS NOT NULL;
 
-  SELECT count(*) INTO month_count
+  SELECT count(DISTINCT user_id) INTO month_count
     FROM public.login_logs
-    WHERE logged_at >= date_trunc('month', now() AT TIME ZONE 'UTC');
+    WHERE logged_at >= date_trunc('month', now() AT TIME ZONE 'UTC')
+      AND user_id IS NOT NULL;
 
-  SELECT count(*) INTO year_count
+  SELECT count(DISTINCT user_id) INTO year_count
     FROM public.login_logs
-    WHERE logged_at >= date_trunc('year', now() AT TIME ZONE 'UTC');
+    WHERE logged_at >= date_trunc('year', now() AT TIME ZONE 'UTC')
+      AND user_id IS NOT NULL;
 
   SELECT json_agg(d ORDER BY d.date)
   INTO daily_breakdown
   FROM (
     SELECT
       date_trunc('day', logged_at)::date AS date,
-      count(*) AS count
+      count(DISTINCT user_id) AS count
     FROM public.login_logs
     WHERE logged_at >= now() - INTERVAL '30 days'
+      AND user_id IS NOT NULL
     GROUP BY date_trunc('day', logged_at)::date
   ) d;
 
@@ -261,7 +267,231 @@ BEGIN
 END;
 $$;
 
--- 7. Seed universities by province (Angola)
+-- 7. Site visits tracking (incluindo utilizadores NÃO cadastrados)
+CREATE TABLE IF NOT EXISTS public.site_visits (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  visitor_id text NOT NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  path text,
+  user_agent text,
+  referer text,
+  visited_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_visits_visited_at ON public.site_visits(visited_at DESC);
+CREATE INDEX IF NOT EXISTS idx_site_visits_visitor_id ON public.site_visits(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_site_visits_user_id ON public.site_visits(user_id);
+
+ALTER TABLE public.site_visits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can log a visit" ON public.site_visits;
+CREATE POLICY "Anyone can log a visit" ON public.site_visits
+  FOR INSERT TO anon, authenticated
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can view all visits" ON public.site_visits;
+CREATE POLICY "Admins can view all visits" ON public.site_visits
+  FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+CREATE OR REPLACE FUNCTION public.get_visitor_stats()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  visitors_today INT;
+  visitors_month INT;
+  visitors_year INT;
+  pageviews_today INT;
+  pageviews_month INT;
+  anon_today INT;
+  anon_month INT;
+  daily_breakdown json;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  SELECT count(DISTINCT visitor_id) INTO visitors_today
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('day', now() AT TIME ZONE 'UTC');
+
+  SELECT count(DISTINCT visitor_id) INTO visitors_month
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('month', now() AT TIME ZONE 'UTC');
+
+  SELECT count(DISTINCT visitor_id) INTO visitors_year
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('year', now() AT TIME ZONE 'UTC');
+
+  SELECT count(*) INTO pageviews_today
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('day', now() AT TIME ZONE 'UTC');
+
+  SELECT count(*) INTO pageviews_month
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('month', now() AT TIME ZONE 'UTC');
+
+  SELECT count(DISTINCT visitor_id) INTO anon_today
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('day', now() AT TIME ZONE 'UTC')
+      AND user_id IS NULL;
+
+  SELECT count(DISTINCT visitor_id) INTO anon_month
+    FROM public.site_visits
+    WHERE visited_at >= date_trunc('month', now() AT TIME ZONE 'UTC')
+      AND user_id IS NULL;
+
+  SELECT json_agg(d ORDER BY d.date)
+  INTO daily_breakdown
+  FROM (
+    SELECT
+      date_trunc('day', visited_at)::date AS date,
+      count(DISTINCT visitor_id) AS count
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days'
+    GROUP BY date_trunc('day', visited_at)::date
+  ) d;
+
+  RETURN json_build_object(
+    'visitors_today', visitors_today,
+    'visitors_month', visitors_month,
+    'visitors_year', visitors_year,
+    'pageviews_today', pageviews_today,
+    'pageviews_month', pageviews_month,
+    'anon_today', anon_today,
+    'anon_month', anon_month,
+    'daily_breakdown', coalesce(daily_breakdown, '[]'::json)
+  );
+END;
+$$;
+
+-- 8. Visitor funnel + insights detalhados
+CREATE OR REPLACE FUNCTION public.claim_visitor_visits(p_visitor_id text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF auth.uid() IS NULL OR p_visitor_id IS NULL OR p_visitor_id = '' THEN
+    RETURN;
+  END IF;
+  UPDATE public.site_visits
+    SET user_id = auth.uid()
+    WHERE visitor_id = p_visitor_id
+      AND user_id IS NULL;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.claim_visitor_visits(text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_visitor_details()
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  top_paths json;
+  top_referers json;
+  device_breakdown json;
+  browser_breakdown json;
+  recent_visits json;
+  total_visitors INT;
+  converted_visitors INT;
+  conversion_rate numeric;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  SELECT json_agg(p ORDER BY p.views DESC) INTO top_paths
+  FROM (
+    SELECT path, count(*) AS views, count(DISTINCT visitor_id) AS visitors
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days' AND path IS NOT NULL
+    GROUP BY path ORDER BY count(*) DESC LIMIT 10
+  ) p;
+
+  SELECT json_agg(r ORDER BY r.visits DESC) INTO top_referers
+  FROM (
+    SELECT
+      CASE
+        WHEN referer IS NULL OR referer = '' THEN 'Directo'
+        ELSE regexp_replace(coalesce(substring(referer from '://([^/]+)'), 'Directo'), '^www\.', '')
+      END AS source,
+      count(*) AS visits, count(DISTINCT visitor_id) AS visitors
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days'
+    GROUP BY source ORDER BY count(*) DESC LIMIT 10
+  ) r;
+
+  SELECT json_agg(d ORDER BY d.visitors DESC) INTO device_breakdown
+  FROM (
+    SELECT
+      CASE
+        WHEN user_agent IS NULL OR user_agent = '' THEN 'Desconhecido'
+        WHEN user_agent ~* '(iPad|Tablet)' THEN 'Tablet'
+        WHEN user_agent ~* '(Mobile|Android|iPhone|iPod)' THEN 'Mobile'
+        ELSE 'Desktop'
+      END AS device,
+      count(DISTINCT visitor_id) AS visitors, count(*) AS visits
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days'
+    GROUP BY device ORDER BY count(DISTINCT visitor_id) DESC
+  ) d;
+
+  SELECT json_agg(b ORDER BY b.visitors DESC) INTO browser_breakdown
+  FROM (
+    SELECT
+      CASE
+        WHEN user_agent IS NULL OR user_agent = '' THEN 'Desconhecido'
+        WHEN user_agent ~* 'Edg/' THEN 'Edge'
+        WHEN user_agent ~* '(OPR/|Opera)' THEN 'Opera'
+        WHEN user_agent ~* 'Firefox' THEN 'Firefox'
+        WHEN user_agent ~* 'Chrome' THEN 'Chrome'
+        WHEN user_agent ~* 'Safari' THEN 'Safari'
+        ELSE 'Outros'
+      END AS browser,
+      count(DISTINCT visitor_id) AS visitors, count(*) AS visits
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days'
+    GROUP BY browser ORDER BY count(DISTINCT visitor_id) DESC
+  ) b;
+
+  SELECT json_agg(v ORDER BY v.visited_at DESC) INTO recent_visits
+  FROM (
+    SELECT sv.id, sv.visitor_id, sv.path, sv.referer, sv.user_agent,
+           sv.visited_at, sv.user_id, u.email AS user_email
+    FROM public.site_visits sv
+    LEFT JOIN auth.users u ON u.id = sv.user_id
+    ORDER BY sv.visited_at DESC LIMIT 50
+  ) v;
+
+  SELECT count(DISTINCT visitor_id) INTO total_visitors
+    FROM public.site_visits WHERE visited_at >= now() - INTERVAL '30 days';
+  SELECT count(DISTINCT visitor_id) INTO converted_visitors
+    FROM public.site_visits
+    WHERE visited_at >= now() - INTERVAL '30 days' AND user_id IS NOT NULL;
+  IF total_visitors > 0 THEN
+    conversion_rate := round((converted_visitors::numeric / total_visitors::numeric) * 100, 1);
+  ELSE
+    conversion_rate := 0;
+  END IF;
+
+  RETURN json_build_object(
+    'top_paths', coalesce(top_paths, '[]'::json),
+    'top_referers', coalesce(top_referers, '[]'::json),
+    'device_breakdown', coalesce(device_breakdown, '[]'::json),
+    'browser_breakdown', coalesce(browser_breakdown, '[]'::json),
+    'recent_visits', coalesce(recent_visits, '[]'::json),
+    'total_visitors', total_visitors,
+    'converted_visitors', converted_visitors,
+    'conversion_rate', conversion_rate
+  );
+END;
+$$;
+
+-- 9. Seed universities by province (Angola)
 -- Universidades de Luanda
 INSERT INTO public.universities (name, province, city, logo_url) VALUES
   ('Universidade Agostinho Neto (UAN)', 'Luanda', 'Luanda', 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Universidade_Agostinho_Neto_logo.png/320px-Universidade_Agostinho_Neto_logo.png'),

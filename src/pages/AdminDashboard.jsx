@@ -4,7 +4,8 @@ import { motion } from 'framer-motion'
 import {
   Users, FileText, CreditCard, Banknote, CheckCircle, XCircle, Clock,
   Activity, AlertTriangle, Calendar, RotateCcw, Shield, TrendingUp,
-  BarChart2, RefreshCw, Copy, Undo2, Trash2, Search,
+  BarChart2, RefreshCw, Copy, Undo2, Trash2, Search, Globe, UserPlus, Eye,
+  Monitor, Smartphone, Tablet, Compass, ExternalLink, Target, MapPin,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -62,6 +63,63 @@ function MiniBarChart({ data }) {
   )
 }
 
+// ─── Horizontal bar list (top paths / referers / devices) ─────────────────
+function HBarList({ data, valueKey = 'visitors', labelKey = 'source', total, color = 'from-primary-500 to-accent-500' }) {
+  if (!data || data.length === 0) {
+    return <p className="text-xs text-dark-400 italic py-2">Sem dados ainda.</p>
+  }
+  const max = total || Math.max(...data.map((d) => Number(d[valueKey]) || 0), 1)
+  return (
+    <ul className="space-y-2.5">
+      {data.map((d, i) => {
+        const value = Number(d[valueKey]) || 0
+        const pct = Math.round((value / max) * 100)
+        return (
+          <li key={i} className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-dark-700 font-medium truncate" title={d[labelKey]}>
+                {d[labelKey] || '—'}
+              </span>
+              <span className="text-dark-500 tabular-nums font-semibold flex-shrink-0">
+                {value.toLocaleString('pt-AO')}
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-dark-100/60 overflow-hidden">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r ${color} transition-all duration-500`}
+                style={{ width: `${Math.max(pct, 4)}%` }}
+              />
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+const deviceIconFor = (name) => {
+  if (!name) return Monitor
+  const n = name.toLowerCase()
+  if (n.includes('mobile')) return Smartphone
+  if (n.includes('tablet')) return Tablet
+  if (n.includes('desktop')) return Monitor
+  return Compass
+}
+
+function relativeTime(dateStr) {
+  if (!dateStr) return '—'
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return 'agora mesmo'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `há ${m} min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `há ${h}h`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `há ${d}d`
+  return new Date(dateStr).toLocaleDateString('pt-AO')
+}
+
 // ─── Status pill ───────────────────────────────────────────────────────────
 function StatusPill({ status }) {
   const map = {
@@ -89,6 +147,18 @@ export default function AdminDashboard() {
   const [accessStats, setAccessStats] = useState({
     today: 0, month: 0, year: 0, daily_breakdown: [],
   })
+  const [visitorStats, setVisitorStats] = useState({
+    visitors_today: 0, visitors_month: 0, visitors_year: 0,
+    pageviews_today: 0, pageviews_month: 0,
+    anon_today: 0, anon_month: 0,
+    daily_breakdown: [],
+  })
+  const [visitorDetails, setVisitorDetails] = useState({
+    top_paths: [], top_referers: [],
+    device_breakdown: [], browser_breakdown: [],
+    recent_visits: [],
+    total_visitors: 0, converted_visitors: 0, conversion_rate: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
@@ -105,12 +175,14 @@ export default function AdminDashboard() {
     try {
       if (!silent) setLoading(true); else setRefreshing(true)
 
-      const [statsRes, paymentsRes, accessRes] = await Promise.all([
+      const [statsRes, paymentsRes, accessRes, visitorsRes, detailsRes] = await Promise.all([
         supabase.rpc('get_dashboard_stats'),
         supabase.from('payments')
           .select(`id, amount, reference_code, status, created_at, user_id, project_id, projects(title)`)
           .order('created_at', { ascending: false }),
         supabase.rpc('get_access_stats'),
+        supabase.rpc('get_visitor_stats'),
+        supabase.rpc('get_visitor_details'),
       ])
 
       if (statsRes.error) {
@@ -120,6 +192,10 @@ export default function AdminDashboard() {
 
       if (!paymentsRes.error) setPayments(paymentsRes.data || [])
       if (!accessRes.error && accessRes.data) setAccessStats(accessRes.data)
+      if (!visitorsRes.error && visitorsRes.data) setVisitorStats(visitorsRes.data)
+      else if (visitorsRes.error) console.warn('Visitor stats indisponível:', visitorsRes.error.message)
+      if (!detailsRes.error && detailsRes.data) setVisitorDetails(detailsRes.data)
+      else if (detailsRes.error) console.warn('Visitor details indisponível:', detailsRes.error.message)
     } catch (err) { console.error(err) }
     finally { setLoading(false); setRefreshing(false) }
   }, [])
@@ -191,6 +267,14 @@ export default function AdminDashboard() {
   const chartData = last14Days.map((date) => ({
     date,
     count: breakdownMap[date] || 0,
+    label: new Date(date + 'T12:00:00').toLocaleDateString('pt-AO', { day: '2-digit', month: 'short' }),
+  }))
+
+  const visitorBreakdownMap = {}
+  ;(visitorStats.daily_breakdown || []).forEach((d) => { visitorBreakdownMap[d.date] = d.count })
+  const visitorChartData = last14Days.map((date) => ({
+    date,
+    count: visitorBreakdownMap[date] || 0,
     label: new Date(date + 'T12:00:00').toLocaleDateString('pt-AO', { day: '2-digit', month: 'short' }),
   }))
 
@@ -279,9 +363,10 @@ export default function AdminDashboard() {
               value={activeTab}
               onChange={setActiveTab}
               tabs={[
-                { id: 'overview', label: 'Visão Geral', icon: BarChart2 },
-                { id: 'access',   label: 'Acessos',     icon: Activity },
-                { id: 'payments', label: 'Pagamentos',  icon: CreditCard },
+                { id: 'overview',  label: 'Visão Geral', icon: BarChart2 },
+                { id: 'access',    label: 'Acessos',     icon: Activity },
+                { id: 'audience',  label: 'Audiência',   icon: Globe },
+                { id: 'payments',  label: 'Pagamentos',  icon: CreditCard },
               ]}
             />
           </div>
@@ -313,19 +398,66 @@ export default function AdminDashboard() {
                   Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
                 ) : (
                   <>
-                    <StatCard label="Utilizadores"          value={stats.total_users}    icon={Users}      tone="info"    />
-                    <StatCard label="Projectos / TCCs"      value={stats.total_projects} icon={FileText}   tone="primary" />
-                    <StatCard label="Receita total"         value={formatCurrency(stats.total_revenue)} icon={Banknote} tone="success" />
-                    <StatCard label="Pagamentos pendentes" value={stats.pending_payments} icon={CreditCard} tone="warning" />
+                    <StatCard label="Utilizadores cadastrados" value={stats.total_users}    icon={Users}      tone="info"    helperText="Total no período" />
+                    <StatCard label="Projectos / TCCs"         value={stats.total_projects} icon={FileText}   tone="primary" />
+                    <StatCard label="Receita total"            value={formatCurrency(stats.total_revenue)} icon={Banknote} tone="success" />
+                    <StatCard label="Pagamentos pendentes"     value={stats.pending_payments} icon={CreditCard} tone="warning" />
                   </>
                 )}
               </div>
 
-              {/* Resumo de acessos */}
+              {/* Visitantes do site (anónimos + autenticados) */}
+              <div className="glass-card p-5 sm:p-6 mb-5">
+                <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-primary-600" /> Visitantes do site
+                    </h2>
+                    <p className="text-xs sm:text-sm text-dark-500 mt-0.5">
+                      Todas as pessoas que abriram o site, incluindo as <strong>não cadastradas</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { v: visitorStats.visitors_today, l: 'Hoje',     tone: 'bg-info-50 text-info-700' },
+                    { v: visitorStats.visitors_month, l: 'Este mês', tone: 'bg-primary-50 text-primary-700' },
+                    { v: visitorStats.visitors_year,  l: 'Este ano', tone: 'bg-success-50 text-success-700' },
+                  ].map((s) => (
+                    <div key={s.l} className={`text-center p-4 sm:p-5 rounded-2xl ${s.tone} ring-1 ring-current/10`}>
+                      <p className="text-2xl sm:text-3xl font-display font-extrabold tracking-tight">{s.v}</p>
+                      <p className="text-xs sm:text-sm font-medium opacity-80 mt-1">{s.l}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-dark-100/60">
+                  <div className="text-xs text-dark-500">
+                    <span className="block text-base font-bold text-dark-900">{visitorStats.anon_today}</span>
+                    Não cadastrados hoje
+                  </div>
+                  <div className="text-xs text-dark-500">
+                    <span className="block text-base font-bold text-dark-900">{visitorStats.anon_month}</span>
+                    Não cadastrados este mês
+                  </div>
+                  <div className="text-xs text-dark-500">
+                    <span className="block text-base font-bold text-dark-900">{visitorStats.pageviews_today}</span>
+                    Páginas vistas hoje
+                  </div>
+                </div>
+              </div>
+
+              {/* Utilizadores autenticados que acederam */}
               <div className="glass-card p-5 sm:p-6">
-                <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 mb-4 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary-600" /> Resumo de acessos
-                </h2>
+                <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-primary-600" /> Utilizadores que fizeram login
+                    </h2>
+                    <p className="text-xs sm:text-sm text-dark-500 mt-0.5">
+                      Apenas pessoas que se autenticaram (cada uma conta uma vez por período).
+                    </p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { v: accessStats.today, l: 'Hoje',      tone: 'bg-info-50 text-info-700' },
@@ -345,13 +477,79 @@ export default function AdminDashboard() {
           {/* ════ TAB 2 — ACCESS ════ */}
           {activeTab === 'access' && (
             <motion.div variants={fadeUp} initial="hidden" animate="visible">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-                <StatCard label="Acessos hoje"     value={accessStats.today} icon={Activity} tone="info"
-                  helperText={new Date().toLocaleDateString('pt-AO', { day: '2-digit', month: 'long' })} />
-                <StatCard label="Acessos este mês" value={accessStats.month} icon={TrendingUp} tone="primary"
-                  helperText={new Date().toLocaleDateString('pt-AO', { month: 'long', year: 'numeric' })} />
-                <StatCard label="Acessos este ano" value={accessStats.year}  icon={BarChart2} tone="success"
-                  helperText={String(new Date().getFullYear())} />
+              {/* Visitantes do site (anon + auth) */}
+              <div className="mb-6">
+                <h2 className="text-sm font-bold text-dark-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary-600" /> Visitantes do site (anónimos + autenticados)
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <StatCard label="Visitantes únicos · hoje"     value={visitorStats.visitors_today} icon={Globe} tone="info"
+                    helperText={new Date().toLocaleDateString('pt-AO', { day: '2-digit', month: 'long' })} />
+                  <StatCard label="Visitantes únicos · este mês" value={visitorStats.visitors_month} icon={Users} tone="primary"
+                    helperText={new Date().toLocaleDateString('pt-AO', { month: 'long', year: 'numeric' })} />
+                  <StatCard label="Visitantes únicos · este ano" value={visitorStats.visitors_year}  icon={UserPlus} tone="success"
+                    helperText={String(new Date().getFullYear())} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-3">
+                  <StatCard label="Não cadastrados · hoje"      value={visitorStats.anon_today} icon={Users} tone="warning"
+                    helperText="Visitantes sem conta" />
+                  <StatCard label="Não cadastrados · este mês"  value={visitorStats.anon_month} icon={Users} tone="warning"
+                    helperText="Visitantes sem conta" />
+                  <StatCard label="Páginas vistas · hoje"        value={visitorStats.pageviews_today} icon={Eye} tone="info"
+                    helperText="Total de aberturas de página" />
+                </div>
+              </div>
+
+              <div className="glass-card p-5 sm:p-6 mb-6">
+                <div className="flex items-start justify-between flex-wrap gap-2 mb-5">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                      <BarChart2 className="w-5 h-5 text-primary-600" />
+                      Visitantes únicos · últimos 14 dias
+                    </h2>
+                    <p className="text-xs sm:text-sm text-dark-500 mt-0.5">
+                      Cada barra mostra quantos navegadores diferentes abriram o site nesse dia (inclui anónimos).
+                    </p>
+                  </div>
+                  <span className="badge badge-info">
+                    Soma: {visitorChartData.reduce((acc, d) => acc + d.count, 0)}
+                  </span>
+                </div>
+
+                {visitorChartData.every((d) => d.count === 0) ? (
+                  <EmptyState
+                    icon={Globe} size="sm"
+                    title="Sem visitas registadas"
+                    description="As visitas serão registadas automaticamente quando alguém abrir o site."
+                  />
+                ) : (
+                  <>
+                    <MiniBarChart data={visitorChartData} />
+                    <div className="flex gap-1 mt-2">
+                      {visitorChartData.map((d, i) => (
+                        <div
+                          key={i}
+                          className={`flex-1 text-center text-[9px] text-dark-400 ${i % 2 === 0 ? 'opacity-100' : 'opacity-0'}`}
+                        >{d.label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Logins autenticados */}
+              <div className="mb-3">
+                <h2 className="text-sm font-bold text-dark-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary-600" /> Apenas logins autenticados
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <StatCard label="Utilizadores únicos · hoje"     value={accessStats.today} icon={Activity} tone="info"
+                    helperText={new Date().toLocaleDateString('pt-AO', { day: '2-digit', month: 'long' })} />
+                  <StatCard label="Utilizadores únicos · este mês" value={accessStats.month} icon={TrendingUp} tone="primary"
+                    helperText={new Date().toLocaleDateString('pt-AO', { month: 'long', year: 'numeric' })} />
+                  <StatCard label="Utilizadores únicos · este ano" value={accessStats.year}  icon={BarChart2} tone="success"
+                    helperText={String(new Date().getFullYear())} />
+                </div>
               </div>
 
               <div className="glass-card p-5 sm:p-6">
@@ -359,21 +557,21 @@ export default function AdminDashboard() {
                   <div>
                     <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
                       <BarChart2 className="w-5 h-5 text-primary-600" />
-                      Acessos · últimos 14 dias
+                      Utilizadores autenticados · últimos 14 dias
                     </h2>
                     <p className="text-xs sm:text-sm text-dark-500 mt-0.5">
-                      Cada barra representa os logins registados num dia.
+                      Cada barra mostra quantas pessoas distintas fizeram login nesse dia.
                     </p>
                   </div>
                   <span className="badge badge-info">
-                    Total: {chartData.reduce((acc, d) => acc + d.count, 0)}
+                    Soma: {chartData.reduce((acc, d) => acc + d.count, 0)}
                   </span>
                 </div>
 
                 {chartData.every((d) => d.count === 0) ? (
                   <EmptyState
                     icon={Activity} size="sm"
-                    title="Sem acessos registados"
+                    title="Sem logins registados"
                     description="Os logins serão registados automaticamente."
                   />
                 ) : (
@@ -393,7 +591,201 @@ export default function AdminDashboard() {
             </motion.div>
           )}
 
-          {/* ════ TAB 3 — PAYMENTS ════ */}
+          {/* ════ TAB 3 — AUDIENCE ════ */}
+          {activeTab === 'audience' && (
+            <motion.div variants={fadeUp} initial="hidden" animate="visible">
+              {/* KPIs do funil */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                <StatCard
+                  label="Visitantes (30 dias)"
+                  value={visitorDetails.total_visitors}
+                  icon={Globe} tone="info"
+                  helperText="Pessoas únicas que abriram o site"
+                />
+                <StatCard
+                  label="Tornaram-se utilizadores"
+                  value={visitorDetails.converted_visitors}
+                  icon={UserPlus} tone="success"
+                  helperText="Visitantes que se cadastraram / autenticaram"
+                />
+                <StatCard
+                  label="Taxa de conversão"
+                  value={`${visitorDetails.conversion_rate}%`}
+                  icon={Target} tone="primary"
+                  helperText="cadastrados ÷ visitantes únicos"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 mb-5">
+                {/* Top páginas */}
+                <div className="glass-card p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-2 mb-4">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary-600" /> Páginas mais visitadas
+                      </h2>
+                      <p className="text-xs text-dark-500 mt-0.5">Últimos 30 dias</p>
+                    </div>
+                  </div>
+                  <HBarList
+                    data={visitorDetails.top_paths}
+                    labelKey="path"
+                    valueKey="views"
+                    color="from-primary-500 to-accent-500"
+                  />
+                </div>
+
+                {/* Top referers */}
+                <div className="glass-card p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-2 mb-4">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                        <ExternalLink className="w-5 h-5 text-primary-600" /> Origens de tráfego
+                      </h2>
+                      <p className="text-xs text-dark-500 mt-0.5">De onde vieram os visitantes</p>
+                    </div>
+                  </div>
+                  <HBarList
+                    data={visitorDetails.top_referers}
+                    labelKey="source"
+                    valueKey="visits"
+                    color="from-success-500 to-emerald-400"
+                  />
+                </div>
+
+                {/* Dispositivos */}
+                <div className="glass-card p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-2 mb-4">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                        <Smartphone className="w-5 h-5 text-primary-600" /> Dispositivos
+                      </h2>
+                      <p className="text-xs text-dark-500 mt-0.5">Visitantes únicos por tipo</p>
+                    </div>
+                  </div>
+                  {visitorDetails.device_breakdown?.length === 0 ? (
+                    <p className="text-xs text-dark-400 italic py-2">Sem dados ainda.</p>
+                  ) : (
+                    <ul className="space-y-2.5">
+                      {(visitorDetails.device_breakdown || []).map((d, i) => {
+                        const Icon = deviceIconFor(d.device)
+                        const total = (visitorDetails.device_breakdown || []).reduce(
+                          (a, b) => a + (Number(b.visitors) || 0),
+                          0
+                        ) || 1
+                        const pct = Math.round(((Number(d.visitors) || 0) / total) * 100)
+                        return (
+                          <li key={i} className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center flex-shrink-0">
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="font-semibold text-dark-900">{d.device}</span>
+                                <span className="text-dark-500 tabular-nums">{d.visitors} · {pct}%</span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-dark-100/60 overflow-hidden mt-1">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-info-500 to-primary-500"
+                                  style={{ width: `${Math.max(pct, 3)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Navegadores */}
+                <div className="glass-card p-5 sm:p-6">
+                  <div className="flex items-start justify-between gap-2 mb-4">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                        <Compass className="w-5 h-5 text-primary-600" /> Navegadores
+                      </h2>
+                      <p className="text-xs text-dark-500 mt-0.5">Visitantes únicos por browser</p>
+                    </div>
+                  </div>
+                  <HBarList
+                    data={visitorDetails.browser_breakdown}
+                    labelKey="browser"
+                    valueKey="visitors"
+                    color="from-warning-500 to-amber-400"
+                  />
+                </div>
+              </div>
+
+              {/* Visitas recentes */}
+              <div className="glass-card p-0 overflow-hidden">
+                <div className="px-5 sm:px-6 py-4 border-b border-dark-100 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-display font-bold text-dark-900 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-primary-600" /> Visitas recentes
+                    </h2>
+                    <p className="text-xs text-dark-500 mt-0.5">Últimas 50 aberturas de página</p>
+                  </div>
+                  <span className="badge badge-info">
+                    {visitorDetails.recent_visits?.length || 0} eventos
+                  </span>
+                </div>
+                {(visitorDetails.recent_visits || []).length === 0 ? (
+                  <EmptyState
+                    icon={Globe} size="sm"
+                    title="Sem visitas registadas"
+                    description="As visitas aparecerão aqui à medida que pessoas abrirem o site."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-dark-50/60 text-dark-500 border-b border-dark-100">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Quando</th>
+                          <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Página</th>
+                          <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">Quem</th>
+                          <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider hidden md:table-cell">Origem</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-dark-100">
+                        {visitorDetails.recent_visits.map((v) => {
+                          const sourceHost = v.referer
+                            ? (v.referer.match(/^https?:\/\/([^/]+)/)?.[1] || v.referer).replace(/^www\./, '')
+                            : 'Directo'
+                          return (
+                            <tr key={v.id} className="hover:bg-dark-50/40 transition-colors">
+                              <td className="px-4 py-3 text-dark-500 text-xs whitespace-nowrap" title={formatDate(v.visited_at)}>
+                                {relativeTime(v.visited_at)}
+                              </td>
+                              <td className="px-4 py-3 text-dark-700 font-mono text-xs max-w-[220px] truncate" title={v.path}>
+                                {v.path || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-xs">
+                                {v.user_email ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-success-50 text-success-700 font-semibold">
+                                    <UserPlus className="w-3 h-3" /> {v.user_email}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-dark-100 text-dark-500 font-mono">
+                                    <Globe className="w-3 h-3" /> anónimo
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-dark-500 text-xs hidden md:table-cell max-w-[160px] truncate" title={v.referer || 'Directo'}>
+                                {sourceHost}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ════ TAB 4 — PAYMENTS ════ */}
           {activeTab === 'payments' && (
             <motion.div variants={fadeUp} initial="hidden" animate="visible">
               {/* Toolbar */}

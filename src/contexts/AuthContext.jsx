@@ -1,5 +1,17 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getVisitorId } from '../lib/visitorId'
+
+// Associa retroactivamente todas as visitas anónimas deste navegador
+// ao utilizador que acabou de autenticar-se. Falhas são silenciosas.
+function claimVisitorVisits() {
+  const visitorId = getVisitorId()
+  if (!visitorId) return
+  supabase
+    .rpc('claim_visitor_visits', { p_visitor_id: visitorId })
+    .then(() => {})
+    .catch(() => {})
+}
 
 const AuthContext = createContext({})
 
@@ -57,6 +69,10 @@ export function AuthProvider({ children }) {
         },
       },
     })
+    // Associa visitas anteriores deste navegador ao novo utilizador
+    if (!error && data?.user) {
+      claimVisitorVisits()
+    }
     return { data, error }
   }
 
@@ -65,13 +81,13 @@ export function AuthProvider({ children }) {
       email,
       password,
     })
-    // Record login event for access statistics (non-blocking, silent on error)
     if (!error && data?.user) {
       supabase
         .from('login_logs')
         .insert({ user_id: data.user.id })
         .then(() => {})
         .catch(() => {})
+      claimVisitorVisits()
     }
     return { data, error }
   }

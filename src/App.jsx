@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import FloatingBackground from './components/FloatingBackground'
 import MobileNavigation from './components/MobileNavigation'
 import PageTransition from './components/ui/PageTransition'
+import VisitTracker from './components/VisitTracker'
 
 // ─── Lazy-loaded pages — code-splitting + faster TTI ─────────────────────
 const LandingPage    = lazy(() => import('./pages/LandingPage'))
@@ -59,6 +60,7 @@ function PublicRoute({ children }) {
 function AppShell() {
   return (
     <Suspense fallback={<FullscreenLoader />}>
+      <VisitTracker />
       <PageTransition>
         <Routes>
           <Route path="/" element={<LandingPage />} />
