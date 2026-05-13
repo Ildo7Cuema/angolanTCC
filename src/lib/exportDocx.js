@@ -33,6 +33,7 @@ import { supabase } from './supabase'
 import { getSectionsForProject } from './documentSections'
 import { sanitizeAIContent } from './sanitizeContent'
 import { getUniversityProfile, ACADEMIC_NORMS } from './universityProfiles'
+import { buildSoftwareDevDiagrams } from './softwareDevDiagrams'
 
 // ─── Constantes de Estilo (defaults — podem ser sobrepostos pelo perfil) ──
 
@@ -128,6 +129,225 @@ function createMarkdownTable(lines) {
       insideV: CELL_BORDER,
     },
   })
+}
+
+/**
+ * Converte uma string Data URL (`data:image/png;base64,...`) em ArrayBuffer
+ * que o `docx` (ImageRun) consegue embutir directamente. Devolve null
+ * caso o input seja inválido.
+ */
+function dataUrlToArrayBuffer(dataUrl) {
+  try {
+    if (!dataUrl || typeof dataUrl !== 'string') return null
+    const commaIdx = dataUrl.indexOf(',')
+    if (commaIdx < 0) return null
+    const base64 = dataUrl.slice(commaIdx + 1)
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return bytes.buffer
+  } catch (e) {
+    console.error('Erro a descodificar imagem base64:', e)
+    return null
+  }
+}
+
+/**
+ * Extrai o tipo da imagem (png/jpg/gif/bmp) a partir do MIME para o `docx`.
+ * O parâmetro `type` do ImageRun aceita 'png' | 'jpg' | 'gif' | 'bmp' | 'svg'.
+ */
+function mimeToDocxImageType(mime) {
+  if (!mime) return 'png'
+  const m = mime.toLowerCase()
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg'
+  if (m.includes('gif')) return 'gif'
+  if (m.includes('bmp')) return 'bmp'
+  if (m.includes('webp')) return 'png' // docx não tem webp — embutimos como png (a maioria dos viewers aceita)
+  return 'png'
+}
+
+/**
+ * Gera os elementos extras (diagramas + imagens do sistema + tabela de
+ * tecnologias) para projectos de Desenvolvimento de Software. Estes
+ * elementos são apensos ao fim da secção de Metodologia para garantir
+ * que aparecem no documento Word independentemente do que a IA gerou.
+ *
+ * O fluxo determinístico é:
+ *   1) Para cada tabela Markdown fornecida pelo estudante (Classes,
+ *      Casos de Uso, Sequência, Mapa Mental), gera um bloco Mermaid via
+ *      `buildSoftwareDevDiagrams` e converte-o em imagem PNG via
+ *      mermaid.ink — exactamente o mesmo pipeline que o exportador já
+ *      usa para blocos ```mermaid``` injectados pela IA.
+ *   2) Insere todas as imagens carregadas pelo estudante, com legendas
+ *      sequenciais.
+ *   3) Insere uma tabela Markdown com as tecnologias adoptadas.
+ *
+ * @returns {Promise<Paragraph[]>}
+ */
+async function buildSoftwareDevAppendix(softwareDev, FONT_USE, LINE_SPACING) {
+  if (!softwareDev) return []
+
+  const elements = []
+
+  // ── 0) Cabeçalho da subsecção ──────────────────────────────────────
+  elements.push(new Paragraph({
+    children: [new TextRun({
+      text: '3.5.1. Modelação do Sistema e Tecnologias Adoptadas',
+      font: FONT_USE,
+      size: FONT_SIZE_HEADING,
+      bold: true,
+      color: '000000',
+    })],
+    spacing: { before: 360, after: 160, line: LINE_SPACING },
+    heading: HeadingLevel.HEADING_3,
+  }))
+
+  // ── 1) Diagramas (determinísticos a partir das tabelas Markdown) ──
+  const diagrams = buildSoftwareDevDiagrams(softwareDev)
+  let figureCounter = 1
+
+  for (const diag of diagrams) {
+    // Extrai o conteúdo Mermaid (sem as fences ```mermaid ... ```)
+    const code = diag.mermaid
+      .replace(/^```mermaid\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim()
+
+    let rendered = false
+    try {
+      const buffer = await getMermaidImage(code)
+      if (buffer) {
+        elements.push(new Paragraph({
+          children: [new ImageRun({
+            data: buffer,
+            transformation: { width: 480, height: 320 },
+          })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 240, after: 80 },
+        }))
+        elements.push(new Paragraph({
+          children: [new TextRun({
+            text: `Figura ${figureCounter}: ${diag.title}.`,
+            font: FONT_USE,
+            size: 20,
+            bold: true,
+            italics: true,
+            color: '000000',
+          })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 0, after: 240 },
+        }))
+        figureCounter++
+        rendered = true
+      }
+    } catch (e) {
+      console.warn('Falha ao renderizar diagrama Mermaid:', diag.kind, e)
+    }
+
+    // Fallback: se mermaid.ink falhar, embute o código fonte como bloco
+    // monoespaçado para não perder a informação fornecida pelo estudante.
+    if (!rendered) {
+      elements.push(new Paragraph({
+        children: [new TextRun({
+          text: `[Falha a renderizar ${diag.title}. Código Mermaid em apêndice.]`,
+          font: FONT_USE,
+          size: FONT_SIZE,
+          italics: true,
+        })],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 120, after: 120 },
+      }))
+    }
+  }
+
+  // ── 2) Imagens do sistema (multi-upload) ──────────────────────────
+  // Aceita o novo formato (system_images: [{data, mime, name}, ...]) e
+  // mantém retrocompatibilidade com o formato antigo (system_image único).
+  let images = []
+  if (Array.isArray(softwareDev.system_images) && softwareDev.system_images.length > 0) {
+    images = softwareDev.system_images.filter((img) => img && img.data)
+  } else if (softwareDev.system_image) {
+    images = [{
+      data: softwareDev.system_image,
+      mime: softwareDev.system_image_mime,
+      name: softwareDev.system_image_name,
+    }]
+  }
+
+  images.forEach((img) => {
+    const buffer = dataUrlToArrayBuffer(img.data)
+    if (!buffer) return
+
+    elements.push(new Paragraph({
+      children: [new ImageRun({
+        data: buffer,
+        type: mimeToDocxImageType(img.mime),
+        transformation: { width: 480, height: 320 },
+      })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 240, after: 80 },
+    }))
+
+    const caption = `Figura ${figureCounter}: ${img.name ? `Interface do sistema — ${img.name}` : 'Interface do sistema proposto'}.`
+
+    elements.push(new Paragraph({
+      children: [new TextRun({
+        text: caption,
+        font: FONT_USE,
+        size: 20,
+        bold: true,
+        italics: true,
+        color: '000000',
+      })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 240 },
+    }))
+    figureCounter++
+  })
+
+  // ── Tabela de tecnologias ──────────────────────────────────────────
+  const tech = softwareDev.technologies || {}
+  const techRows = [
+    ['Frontend', tech.frontend],
+    ['Backend', tech.backend],
+    ['Base de Dados', tech.database],
+    ['DevOps / Hospedagem', tech.devops],
+    ['Outras', tech.others],
+  ].filter(([, v]) => v && String(v).trim())
+
+  if (techRows.length > 0) {
+    elements.push(new Paragraph({
+      children: [new TextRun({
+        text: 'Tecnologias utilizadas no desenvolvimento',
+        font: FONT_USE,
+        size: FONT_SIZE,
+        bold: true,
+        color: '000000',
+      })],
+      spacing: { before: 360, after: 160, line: LINE_SPACING },
+    }))
+
+    const tableMdLines = [
+      '| Camada | Tecnologias adoptadas |',
+      '| --- | --- |',
+      ...techRows.map(([layer, value]) => `| ${layer} | ${value} |`),
+    ]
+    elements.push(createMarkdownTable(tableMdLines))
+    elements.push(new Paragraph({
+      children: [new TextRun({
+        text: 'Tabela: Tecnologias utilizadas no desenvolvimento do sistema.',
+        font: FONT_USE,
+        size: 20,
+        bold: true,
+        italics: true,
+        color: '000000',
+      })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 240 },
+    }))
+  }
+
+  return elements
 }
 
 async function getMermaidImage(mermaidCode) {
@@ -672,6 +892,11 @@ export async function exportToDocx(project, sections) {
     } catch (err) {}
   }
 
+  // Material extra para projectos de Desenvolvimento de Software
+  // (imagem do sistema + tabela de tecnologias). É anexado ao final
+  // da secção de Metodologia para garantir presença determinística.
+  const softwareDev = project?.sections?.software_dev || null
+
   for (const sectionDef of activeSections) {
     const sectionId = sectionDef.id
     const content = sections?.[sectionId]
@@ -679,6 +904,15 @@ export async function exportToDocx(project, sections) {
 
     const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile)
     allElements.push(...elements)
+
+    // Apêndice deterministico para projectos de software:
+    // - Garante que a imagem do sistema é sempre embutida no Word
+    // - Garante a presença da tabela de tecnologias mesmo que a IA
+    //   tenha falhado em renderizá-la no markdown da secção.
+    if (softwareDev && sectionId === 'metodologia') {
+      const appendix = await buildSoftwareDevAppendix(softwareDev, FONT_USE, LINE_SPACING)
+      allElements.push(...appendix)
+    }
   }
 
   const doc = new Document({

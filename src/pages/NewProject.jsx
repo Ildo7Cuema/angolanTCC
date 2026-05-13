@@ -12,6 +12,8 @@ import { suggestNormForUniversity, NORM_OPTIONS, getUniversityProfile } from '..
 import {
   Sparkles, BookOpen, GraduationCap, Building2, User, FileText, Lightbulb,
   RefreshCw, Wand2, CheckCircle2, ClipboardList, ChevronDown, X, Layers, ArrowRight,
+  Code2, Database, Cloud, Image as ImageIcon, Workflow, GitBranch, Network, Upload,
+  Users,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -141,7 +143,104 @@ export default function NewProject() {
     year: new Date().getFullYear().toString(),
     maxPages: 80,
     knowledgeArea: '',
+    // ── Específicos para projectos de Desenvolvimento de Software ──
+    classTableMd: '',
+    useCaseTableMd: '',
+    sequenceTableMd: '',
+    mindMapMd: '',
+    // Lista de imagens do sistema/mockup (suporte multi-upload).
+    // Cada item: { data: 'data:image/...;base64,...', mime, name }
+    systemImages: [],
+    techFrontend: '',
+    techBackend: '',
+    techDatabase: '',
+    techDevops: '',
+    techOthers: '',
   })
+
+  // Detecta projectos de Desenvolvimento de Software pela área de conhecimento.
+  const isSoftwareDevProject = (form.knowledgeArea || '')
+    .toLowerCase()
+    .includes('desenvolvimento de software')
+
+  // ─── Upload de imagens do sistema (multi-upload em base64) ─────────────
+  const MAX_IMG_BYTES = 1.6 * 1024 * 1024 // ~1.6MB por imagem
+  const MAX_IMG_COUNT = 8                  // limite total para evitar payload excessivo
+  const TOTAL_PAYLOAD_BUDGET = 8 * 1024 * 1024 // ~8MB acumulados
+
+  // Lê um File como Data URL (base64) usando Promises.
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'))
+    reader.readAsDataURL(file)
+  })
+
+  // Soma aproximada de bytes das imagens já carregadas
+  const currentImagesByteCount = () =>
+    form.systemImages.reduce((acc, img) => acc + (img?.data?.length || 0), 0) * 0.75
+
+  const handleSystemImagesUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = '' // permite re-seleccionar o mesmo ficheiro depois de remover
+
+    if (files.length === 0) return
+
+    const slotsLeft = MAX_IMG_COUNT - form.systemImages.length
+    if (slotsLeft <= 0) {
+      toast.error(`Limite de ${MAX_IMG_COUNT} imagens atingido.`)
+      return
+    }
+
+    const accepted = []
+    let runningBudget = currentImagesByteCount()
+
+    for (const file of files.slice(0, slotsLeft)) {
+      if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) {
+        toast.error(`"${file.name}": formato inválido. Use PNG, JPG, WEBP ou GIF.`)
+        continue
+      }
+      if (file.size > MAX_IMG_BYTES) {
+        toast.error(`"${file.name}": demasiado grande (máx. 1,6 MB).`)
+        continue
+      }
+      if (runningBudget + file.size > TOTAL_PAYLOAD_BUDGET) {
+        toast.error(`"${file.name}": excede o tamanho total permitido.`)
+        continue
+      }
+      try {
+        const dataUrl = await readFileAsDataUrl(file)
+        accepted.push({ data: dataUrl, mime: file.type, name: file.name })
+        runningBudget += file.size
+      } catch {
+        toast.error(`"${file.name}": falha ao ler.`)
+      }
+    }
+
+    if (accepted.length === 0) return
+
+    setForm((prev) => ({ ...prev, systemImages: [...prev.systemImages, ...accepted] }))
+    toast.success(
+      accepted.length === 1
+        ? 'Imagem carregada com sucesso!'
+        : `${accepted.length} imagens carregadas com sucesso!`
+    )
+
+    if (files.length > slotsLeft) {
+      toast(`Apenas ${slotsLeft} imagens foram aceites (limite de ${MAX_IMG_COUNT}).`)
+    }
+  }
+
+  const removeSystemImageAt = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      systemImages: prev.systemImages.filter((_, i) => i !== index),
+    }))
+  }
+
+  const clearAllSystemImages = () => {
+    setForm((prev) => ({ ...prev, systemImages: [] }))
+  }
 
   const [dbUniversities, setDbUniversities] = useState([])
   const [universityCityMap, setUniversityCityMap] = useState({})
@@ -352,6 +451,44 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
     setLoading(true)
     const universityCity = universityCityMap[form.university] || deriveCityFromProvince(form.university)
 
+    // Bloco específico para projectos de Desenvolvimento de Software.
+    // Apenas é persistido se a área de conhecimento corresponder e o utilizador
+    // tiver preenchido pelo menos um dos campos relevantes.
+    const softwareDevPayload = (() => {
+      if (!isSoftwareDevProject) return null
+      const tech = {
+        frontend: form.techFrontend.trim(),
+        backend: form.techBackend.trim(),
+        database: form.techDatabase.trim(),
+        devops: form.techDevops.trim(),
+        others: form.techOthers.trim(),
+      }
+      const hasAnyTech = Object.values(tech).some(Boolean)
+      const hasAnyDiagram =
+        form.classTableMd.trim() ||
+        form.useCaseTableMd.trim() ||
+        form.sequenceTableMd.trim() ||
+        form.mindMapMd.trim()
+      const hasImages = form.systemImages.length > 0
+      if (!hasAnyTech && !hasAnyDiagram && !hasImages) return null
+
+      // Normaliza imagens para a forma persistida na base de dados.
+      const systemImages = form.systemImages.map((img) => ({
+        data: img.data,
+        mime: img.mime,
+        name: img.name,
+      }))
+
+      return {
+        class_table_md: form.classTableMd.trim(),
+        use_case_table_md: form.useCaseTableMd.trim(),
+        sequence_table_md: form.sequenceTableMd.trim(),
+        mind_map_md: form.mindMapMd.trim(),
+        system_images: systemImages,
+        technologies: tech,
+      }
+    })()
+
     const { data, error } = await supabase
       .from('projects')
       .insert({
@@ -375,6 +512,8 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
           mother_name: user?.user_metadata?.mother_name || '',
           other_relatives: user?.user_metadata?.other_relatives || '',
           university_city: universityCity,
+          knowledge_area: form.knowledgeArea,
+          ...(softwareDevPayload ? { software_dev: softwareDevPayload } : {}),
         },
       })
       .select().single()
@@ -794,6 +933,231 @@ Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`
                 />
               </div>
             </section>
+
+            {/* ── Detalhes de Desenvolvimento de Software ───────────
+                Esta secção só aparece para projectos da área
+                "Desenvolvimento de Software" e fornece à IA
+                informação extra para gerar Diagramas de Classe,
+                de Sequência e Mapas Mentais, embutir uma imagem
+                do sistema no Word e listar as tecnologias
+                utilizadas. */}
+            <AnimatePresence initial={false}>
+              {isSoftwareDevProject && (
+                <motion.section
+                  key="software-dev-section"
+                  initial={{ opacity: 0, y: 12, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="glass-card p-5 sm:p-6 space-y-5 overflow-hidden"
+                >
+                  <SectionHeader
+                    icon={Code2}
+                    title="Detalhes do software a desenvolver"
+                    subtitle="Cole tabelas em Markdown e imagens do sistema. São convertidas automaticamente em Diagramas de Classe, de Casos de Uso, de Sequência e Mapa Mental no documento Word — independentemente da IA."
+                  />
+
+                  {/* Tabela de Classes (Markdown) */}
+                  <div>
+                    <label className="text-sm font-medium text-dark-700 mb-1.5 flex items-center gap-1.5">
+                      <Network className="w-4 h-4 text-primary-600" />
+                      Tabela do Diagrama de Classes <span className="text-dark-400 text-xs">(Markdown)</span>
+                    </label>
+                    <textarea
+                      value={form.classTableMd}
+                      onChange={(e) => updateField('classTableMd', e.target.value)}
+                      className="input-field min-h-[110px] resize-y font-mono text-xs"
+                      placeholder={`| Classe | Atributos | Métodos | Relação |\n| --- | --- | --- | --- |\n| Utilizador | id, nome, email | autenticar(), editarPerfil() | 1..* Pedido |\n| Pedido | id, data, total | criar(), cancelar() | 1..1 Utilizador |`}
+                    />
+                    <p className="text-[11px] text-dark-500 mt-1">
+                      Convertida automaticamente num <strong>classDiagram</strong> Mermaid embutido no Word.
+                    </p>
+                  </div>
+
+                  {/* Tabela de Casos de Uso (Markdown) */}
+                  <div>
+                    <label className="text-sm font-medium text-dark-700 mb-1.5 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-primary-600" />
+                      Tabela do Diagrama de Casos de Uso <span className="text-dark-400 text-xs">(Markdown)</span>
+                    </label>
+                    <textarea
+                      value={form.useCaseTableMd}
+                      onChange={(e) => updateField('useCaseTableMd', e.target.value)}
+                      className="input-field min-h-[110px] resize-y font-mono text-xs"
+                      placeholder={`| Actor | Caso de Uso |\n| --- | --- |\n| Utilizador | Fazer login |\n| Utilizador | Criar pedido |\n| Administrador | Gerir utilizadores |\n| Administrador | Ver relatórios |`}
+                    />
+                    <p className="text-[11px] text-dark-500 mt-1">
+                      Convertida automaticamente num <strong>Diagrama de Casos de Uso</strong> (UML) embutido no Word.
+                    </p>
+                  </div>
+
+                  {/* Tabela de Sequência (Markdown) */}
+                  <div>
+                    <label className="text-sm font-medium text-dark-700 mb-1.5 flex items-center gap-1.5">
+                      <Workflow className="w-4 h-4 text-primary-600" />
+                      Tabela do Diagrama de Sequência <span className="text-dark-400 text-xs">(Markdown)</span>
+                    </label>
+                    <textarea
+                      value={form.sequenceTableMd}
+                      onChange={(e) => updateField('sequenceTableMd', e.target.value)}
+                      className="input-field min-h-[110px] resize-y font-mono text-xs"
+                      placeholder={`| Passo | Actor | Acção | Sistema responde |\n| --- | --- | --- | --- |\n| 1 | Utilizador | introduz credenciais | mostra formulário |\n| 2 | Sistema | valida no servidor | confirma sessão |\n| 3 | Utilizador | acede ao painel | exibe dashboard |`}
+                    />
+                    <p className="text-[11px] text-dark-500 mt-1">
+                      Convertida automaticamente num <strong>sequenceDiagram</strong> Mermaid.
+                    </p>
+                  </div>
+
+                  {/* Mapa Mental (Markdown) */}
+                  <div>
+                    <label className="text-sm font-medium text-dark-700 mb-1.5 flex items-center gap-1.5">
+                      <GitBranch className="w-4 h-4 text-primary-600" />
+                      Tabela do Mapa Mental <span className="text-dark-400 text-xs">(Markdown)</span>
+                    </label>
+                    <textarea
+                      value={form.mindMapMd}
+                      onChange={(e) => updateField('mindMapMd', e.target.value)}
+                      className="input-field min-h-[110px] resize-y font-mono text-xs"
+                      placeholder={`| Nível | Nó | Pai |\n| --- | --- | --- |\n| 1 | Sistema de Gestão | (raiz) |\n| 2 | Módulo de Utilizadores | Sistema de Gestão |\n| 2 | Módulo de Relatórios | Sistema de Gestão |\n| 3 | Login | Módulo de Utilizadores |`}
+                    />
+                    <p className="text-[11px] text-dark-500 mt-1">
+                      Convertida automaticamente num <strong>mindmap</strong> Mermaid.
+                    </p>
+                  </div>
+
+                  {/* Upload de imagens do sistema (multi-upload) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+                      <label className="text-sm font-medium text-dark-700 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-primary-600" />
+                        Imagens do sistema / mockups <span className="text-dark-400 text-xs">(opcional)</span>
+                      </label>
+                      <span className="text-[11px] text-dark-500">
+                        {form.systemImages.length}/{MAX_IMG_COUNT} imagens
+                      </span>
+                    </div>
+
+                    {form.systemImages.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                        {form.systemImages.map((img, idx) => (
+                          <motion.div
+                            key={`${img.name}-${idx}`}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: idx * 0.03 }}
+                            className="relative group rounded-xl overflow-hidden border border-dark-200 bg-white"
+                          >
+                            <img
+                              src={img.data}
+                              alt={`Mockup ${idx + 1}`}
+                              className="w-full aspect-[4/3] object-cover"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent text-white px-2 py-1.5 flex items-end justify-between gap-2">
+                              <span className="text-[11px] font-medium truncate" title={img.name}>
+                                Figura {idx + 1}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeSystemImageAt(idx)}
+                              className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-white/95 text-dark-700 hover:text-danger-600 hover:bg-white shadow ring-1 ring-dark-200 flex items-center justify-center transition-colors"
+                              aria-label={`Remover imagem ${idx + 1}`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+
+                    {form.systemImages.length < MAX_IMG_COUNT && (
+                      <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-dark-200 bg-white/60 hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-5 cursor-pointer">
+                        <Upload className="w-5 h-5 text-primary-600" />
+                        <span className="text-sm font-medium text-dark-800">
+                          {form.systemImages.length === 0
+                            ? 'Clique para enviar imagens'
+                            : 'Adicionar mais imagens'}
+                        </span>
+                        <span className="text-[11px] text-dark-500">
+                          PNG, JPG, WEBP ou GIF — máx. 1,6 MB cada · até {MAX_IMG_COUNT} ficheiros
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          multiple
+                          onChange={handleSystemImagesUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+
+                    {form.systemImages.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={clearAllSystemImages}
+                        className="mt-2 text-xs text-dark-500 hover:text-danger-600 transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <X className="w-3 h-3" /> Remover todas
+                      </button>
+                    )}
+
+                    <p className="text-[11px] text-dark-500 mt-2">
+                      Cada imagem é embutida no documento Word como <strong>Figura N</strong> na secção de Metodologia.
+                    </p>
+                  </div>
+
+                  {/* Tecnologias utilizadas */}
+                  <div>
+                    <label className="text-sm font-medium text-dark-700 mb-1.5 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-primary-600" />
+                      Tecnologias utilizadas no desenvolvimento
+                    </label>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Input
+                        label="Frontend"
+                        value={form.techFrontend}
+                        onChange={(e) => updateField('techFrontend', e.target.value)}
+                        leftIcon={Code2}
+                        placeholder="Ex: React, Tailwind CSS, Vite"
+                      />
+                      <Input
+                        label="Backend"
+                        value={form.techBackend}
+                        onChange={(e) => updateField('techBackend', e.target.value)}
+                        leftIcon={Code2}
+                        placeholder="Ex: Node.js, Express, Python/Django"
+                      />
+                      <Input
+                        label="Base de dados"
+                        value={form.techDatabase}
+                        onChange={(e) => updateField('techDatabase', e.target.value)}
+                        leftIcon={Database}
+                        placeholder="Ex: PostgreSQL, MongoDB, MySQL"
+                      />
+                      <Input
+                        label="DevOps / Hospedagem"
+                        value={form.techDevops}
+                        onChange={(e) => updateField('techDevops', e.target.value)}
+                        leftIcon={Cloud}
+                        placeholder="Ex: Vercel, Docker, AWS, Supabase"
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <Input
+                        label="Outras tecnologias / bibliotecas"
+                        value={form.techOthers}
+                        onChange={(e) => updateField('techOthers', e.target.value)}
+                        leftIcon={Sparkles}
+                        placeholder="Ex: Stripe, Firebase Auth, Mapbox, OpenAI API…"
+                      />
+                    </div>
+                    <p className="text-[11px] text-dark-500 mt-2">
+                      As tecnologias são listadas numa tabela própria no documento Word e referenciadas pela IA no capítulo de Metodologia.
+                    </p>
+                  </div>
+                </motion.section>
+              )}
+            </AnimatePresence>
 
             {/* Tip */}
             <div className="glass-light rounded-2xl p-4 sm:p-5 flex items-start gap-3">

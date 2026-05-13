@@ -91,6 +91,102 @@ function buildSectionPrompt(
   // Province/city from university data (stored in sections or derive from university name)
   const universityCity = projectData?.sections?.university_city || "Luanda";
 
+  // ── Dados específicos para projectos de Desenvolvimento de Software ──────
+  // Quando preenchidos pelo utilizador no formulário, instruem a IA a gerar
+  // Diagramas de Classe, Sequência e Mapas Mentais (em Mermaid) e a
+  // referenciar as tecnologias adoptadas.
+  const softwareDev = (projectData?.sections?.software_dev || null) as
+    | {
+        class_table_md?: string;
+        use_case_table_md?: string;
+        sequence_table_md?: string;
+        mind_map_md?: string;
+        technologies?: Record<string, string>;
+        // Novo formato: lista de imagens. Mantemos `system_image` (string)
+        // por retrocompatibilidade com projectos antigos.
+        system_images?: Array<{ data?: string; mime?: string; name?: string }>;
+        system_image?: string;
+      }
+    | null;
+
+  // Quantas imagens do sistema o estudante anexou (≥0).
+  const systemImageCount = Array.isArray(softwareDev?.system_images)
+    ? softwareDev!.system_images.filter((i) => i && i.data).length
+    : softwareDev?.system_image
+      ? 1
+      : 0;
+
+  const techMap = softwareDev?.technologies || {};
+  const techLines = [
+    techMap.frontend ? `  • Frontend: ${techMap.frontend}` : "",
+    techMap.backend ? `  • Backend: ${techMap.backend}` : "",
+    techMap.database ? `  • Base de Dados: ${techMap.database}` : "",
+    techMap.devops ? `  • DevOps / Hospedagem: ${techMap.devops}` : "",
+    techMap.others ? `  • Outras: ${techMap.others}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // Pré-conta quantos diagramas determinísticos serão inseridos pelo
+  // exportador (com base apenas em haver tabela preenchida). Isto não
+  // gera o Mermaid aqui — apenas indica à IA quais diagramas o
+  // exportador irá inserir, para que ela os mencione no texto.
+  const diagramsAnnounced: Array<{ kind: string; title: string }> = [];
+  if (softwareDev?.class_table_md) {
+    diagramsAnnounced.push({ kind: "class", title: "Diagrama de Classes do sistema" });
+  }
+  if (softwareDev?.use_case_table_md) {
+    diagramsAnnounced.push({ kind: "useCase", title: "Diagrama de Casos de Uso do sistema" });
+  }
+  if (softwareDev?.sequence_table_md) {
+    diagramsAnnounced.push({ kind: "sequence", title: "Diagrama de Sequência da operação principal" });
+  }
+  if (softwareDev?.mind_map_md) {
+    diagramsAnnounced.push({ kind: "mindMap", title: "Mapa Mental dos módulos do sistema" });
+  }
+
+  const diagramAnnounceList = diagramsAnnounced
+    .map((d, i) => `  ${i + 1}. Figura ${i + 1}: ${d.title}`)
+    .join("\n");
+
+  const softwareDevContext = softwareDev
+    ? `
+
+PROJECTO DE DESENVOLVIMENTO DE SOFTWARE — INSTRUÇÕES ADICIONAIS:
+O estudante indicou que este TCC envolve o desenvolvimento de um sistema de software. Foi fornecido o seguinte material:
+
+${softwareDev.class_table_md ? `TABELA DO DIAGRAMA DE CLASSES (Markdown) — para CONTEXTO apenas; NÃO precisas de gerar Mermaid a partir dela, o exportador faz isso automaticamente:
+${softwareDev.class_table_md}
+` : ""}
+${softwareDev.use_case_table_md ? `TABELA DO DIAGRAMA DE CASOS DE USO (Markdown) — para CONTEXTO apenas:
+${softwareDev.use_case_table_md}
+` : ""}
+${softwareDev.sequence_table_md ? `TABELA DO DIAGRAMA DE SEQUÊNCIA (Markdown) — para CONTEXTO apenas:
+${softwareDev.sequence_table_md}
+` : ""}
+${softwareDev.mind_map_md ? `TABELA DO MAPA MENTAL (Markdown) — para CONTEXTO apenas:
+${softwareDev.mind_map_md}
+` : ""}
+${techLines ? `TECNOLOGIAS UTILIZADAS NO DESENVOLVIMENTO (cita-as exactamente como escritas):
+${techLines}
+` : ""}
+${systemImageCount > 0 ? `O estudante anexou ${systemImageCount === 1 ? "UMA IMAGEM" : `${systemImageCount} IMAGENS`} do sistema/interface (mockup${systemImageCount === 1 ? "" : "s"}). ${systemImageCount === 1 ? "Essa imagem será inserida" : "Essas imagens serão inseridas sequencialmente"} pelo exportador. NÃO tentes descrev${systemImageCount === 1 ? "ê-la" : "ê-las"} em pormenor.
+` : ""}
+COMO FUNCIONAM OS DIAGRAMAS E IMAGENS:
+O exportador (módulo \`exportDocx.js\`) renderiza automaticamente os seguintes diagramas DETERMINISTICAMENTE no fim da secção de Metodologia — não precisas de gerar blocos \`\`\`mermaid\`\`\` no texto. As Figuras que vais REFERENCIAR no texto são, por ordem:
+${diagramAnnounceList || "  (nenhum diagrama configurado pelo estudante)"}
+
+REGRAS OBRIGATÓRIAS PARA PROJECTOS DE SOFTWARE:
+A) NÃO geres blocos \`\`\`mermaid\`\`\` na saída — o exportador trata disso a partir das tabelas do estudante. Se gerares mermaid duplicado, o documento ficará com diagramas repetidos.
+B) Na secção de Metodologia, DEVES escrever uma subsecção numerada (ex: 3.5.1. Modelação do Sistema e Tecnologias Adoptadas) que:
+   - Apresenta cada um dos diagramas acima por nome (Diagrama de Classes, Diagrama de Casos de Uso, Diagrama de Sequência, Mapa Mental), referindo-os como "Figura N" exactamente conforme a ordem listada acima.
+   - Antes de cada Figura, escreve 1 parágrafo a explicar o que ela mostra; depois de cada Figura, escreve 1 parágrafo de leitura crítica.
+   - Cita explicitamente as tecnologias indicadas (frontend, backend, base de dados, devops) tal como o estudante as escreveu.
+C) NÃO inventes classes, casos de uso, passos ou módulos que não constem nas tabelas — limita-te ao que o estudante forneceu.
+D) NÃO geres tabela de tecnologias em Markdown — o exportador também a insere automaticamente.
+`
+    : "";
+
   const methodologyDesc: Record<string, string> = {
     qualitativa:
       "qualitativa, privilegiando a análise interpretativa dos dados recolhidos",
@@ -154,7 +250,7 @@ O estudante seleccionou um trabalho total de ${maxPagesNum} páginas.
 A secção "${sectionId}" DEVE atingir: => MÍNIMO DE ${expectedWords} PALAVRAS.
 Escreva exaustivamente. Aprofunde debates com múltiplos autores na literatura (Lakatos, Gil, Sousa, Prodanov, Yin, etc.), pormenorize a aplicação prática no contexto angolano, adicione análise crítica própria, varie as métricas dos parágrafos, evite sumarizações. Entregue um texto LONGO, denso e verdadeiramente extenso.
 
-INSTRUÇÃO ANTI-PLÁGIO: Cada parágrafo deve conter UMA ideia central desenvolvida em 4-6 frases com análise original. Não resuma — ANALISE. Não descreva — INTERPRETE. Não liste — ARGUMENTE.`;
+INSTRUÇÃO ANTI-PLÁGIO: Cada parágrafo deve conter UMA ideia central desenvolvida em 4-6 frases com análise original. Não resuma — ANALISE. Não descreva — INTERPRETE. Não liste — ARGUMENTE.${softwareDevContext}`;
 
   const prompts: Record<string, string> = {
     capa: `${context}
@@ -412,7 +508,20 @@ INSTRUÇÃO — GRÁFICO DE AMOSTRA: Gera OBRIGATORIAMENTE uma tabela Markdown c
 3.6. Limitações do Estudo (1-2 parágrafos)
 - Identificar limitações metodológicas de forma honesta e académica
 
-Citar obrigatoriamente: Gil (2002, 2008), Marconi & Lakatos (2003, 2010), Prodanov & Freitas (2013), Severino (2007).`,
+Citar obrigatoriamente: Gil (2002, 2008), Marconi & Lakatos (2003, 2010), Prodanov & Freitas (2013), Severino (2007).
+${softwareDev ? `
+INSTRUÇÃO ESPECIAL — PROJECTO DE DESENVOLVIMENTO DE SOFTWARE:
+O exportador irá inserir automaticamente, no fim da Metodologia, uma subsecção
+"3.5.1. Modelação do Sistema e Tecnologias Adoptadas" contendo (por ordem):
+${diagramAnnounceList || "  (nenhum diagrama configurado)"}
+${systemImageCount > 0 ? `  - ${systemImageCount === 1 ? "1 imagem" : `${systemImageCount} imagens`} do sistema/mockup (como Figuras seguintes)` : ""}
+${techLines ? "  - Tabela 'Tecnologias utilizadas no desenvolvimento'" : ""}
+
+O QUE TENS DE FAZER:
+- NÃO geres blocos \`\`\`mermaid\`\`\` (o exportador faz isso).
+- ESCREVE, antes da secção 3.6, parágrafos curtos que ANUNCIAM e ANALISAM cada Figura na ordem indicada, mencionando explicitamente "a Figura N apresenta…" / "como ilustrado na Figura N…", para que o documento final fique coerente quando o exportador inserir as imagens dos diagramas.
+- Cita as tecnologias indicadas pelo estudante exactamente como ele as escreveu.
+` : ""}`,
 
     resultados: `${context}
 
