@@ -36,6 +36,7 @@ import { saveAs } from 'file-saver'
 import { supabase } from './supabase'
 import { getSectionsForProject } from './documentSections'
 import { sanitizeAIContent } from './sanitizeContent'
+import { normalizeIndiceContent } from './indiceContent'
 import { getUniversityProfile, ACADEMIC_NORMS } from './universityProfiles'
 import { buildSoftwareDevDiagrams } from './softwareDevDiagrams'
 
@@ -349,6 +350,7 @@ function parseIndiceFromMarkdownTable(lines) {
  */
 function buildIndiceParagraphs(content, FONT_USE, LINE_SPACING, bookmarkMap) {
   const paragraphs = []
+  const normalizedContent = normalizeIndiceContent(content || '')
 
   // Título da secção (mantido aqui para garantir formatação igual às outras)
   paragraphs.push(new Paragraph({
@@ -365,27 +367,17 @@ function buildIndiceParagraphs(content, FONT_USE, LINE_SPACING, bookmarkMap) {
     pageBreakBefore: true,
   }))
 
-  const rawLines = (content || '').split('\n').map((l) => l.trim())
+  const rawLines = normalizedContent.split('\n').map((l) => l.trim())
 
-  // Detecta se a IA devolveu o índice como tabela Markdown e usa parser
-  // dedicado nesse caso.
-  const tableLines = rawLines.filter((l) => l.startsWith('|'))
-  const isMarkdownTable = tableLines.length >= 2
+  const entries = []
+  for (const line of rawLines) {
+    if (!line) continue
+    if (/^(ÍNDICE|SUMÁRIO|ÍNDICE\s+GERAL)$/i.test(line)) continue
+    if (line.startsWith('(') || /^[-=_*]{3,}$/.test(line)) continue
+    if (line.startsWith('|')) continue
 
-  let entries = []
-  if (isMarkdownTable) {
-    entries = parseIndiceFromMarkdownTable(tableLines)
-  } else {
-    for (const line of rawLines) {
-      if (!line) continue
-      // Filtra a própria palavra "ÍNDICE" / "SUMÁRIO" se aparecer no corpo
-      if (/^(ÍNDICE|SUMÁRIO|ÍNDICE\s+GERAL)$/i.test(line)) continue
-      // Filtra notas/observações (parêntesis) ou linhas decorativas
-      if (line.startsWith('(') || /^[-=_*]{3,}$/.test(line)) continue
-
-      const parsed = parseIndiceLine(line)
-      if (parsed && parsed.title) entries.push(parsed)
-    }
+    const parsed = parseIndiceLine(line)
+    if (parsed && parsed.title) entries.push(parsed)
   }
 
   // Indentação por nível (em twips). Nível 0 = sem indent; cada nível seguinte

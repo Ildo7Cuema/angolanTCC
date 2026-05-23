@@ -5,6 +5,7 @@
  */
 import { supabase } from './supabase'
 import { sanitizeAIContent } from './sanitizeContent'
+import { normalizeIndiceContent } from './indiceContent'
 import { getSectionsForProject } from './documentSections'
 
 /**
@@ -117,7 +118,8 @@ export async function generateSection(sectionId, projectData) {
     throw new Error('Resposta vazia da IA. Tente novamente.')
   }
 
-  return sanitizeAIContent(data.text)
+  const text = sanitizeAIContent(data.text)
+  return sectionId === 'indice' ? normalizeIndiceContent(text) : text
 }
 
 /**

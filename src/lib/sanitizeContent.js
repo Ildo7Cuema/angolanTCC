@@ -128,7 +128,10 @@ function stripHorizontalRules(text) {
  */
 function decodeHtmlEntities(text) {
   return text
-    .replace(/&nbsp;/gi, ' ')
+    .replace(/&nbsp;?/gi, ' ')
+    .replace(/&#0*160;/gi, ' ')
+    .replace(/&#x0*a0;/gi, ' ')
+    .replace(/\u00a0/g, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')

@@ -13,6 +13,7 @@ import {
 } from '../lib/generateSection'
 import { exportToDocx } from '../lib/exportDocx'
 import { sanitizeAIContent } from '../lib/sanitizeContent'
+import { normalizeIndiceContent } from '../lib/indiceContent'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Download, RefreshCw, Sparkles, ChevronRight, Edit3, Check, X,
@@ -152,6 +153,32 @@ function ChartBlock({ jsonStr, onTypeChange }) {
   )
 }
 
+function IndiceListPreview({ content }) {
+  const lines = (content || '').split('\n').map((l) => l.trim()).filter(Boolean)
+  if (lines.length === 0) return null
+
+  return (
+    <div className="my-4 space-y-1 font-serif text-sm text-dark-800">
+      {lines.map((line, i) => {
+        const pageMatch = line.match(/[\s\u2013\u2014\-]+(\d{1,4})\s*$/)
+        const page = pageMatch ? pageMatch[1] : ''
+        const title = pageMatch ? line.slice(0, pageMatch.index).trim() : line
+        return (
+          <div key={i} className="flex gap-2 leading-relaxed">
+            <span className="flex-1 min-w-0">{title}</span>
+            {page && (
+              <>
+                <span className="flex-1 border-b border-dotted border-dark-300 mb-1 min-w-[2rem]" aria-hidden />
+                <span className="tabular-nums text-dark-600 shrink-0">{page}</span>
+              </>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function MarkdownTablePreview({ lines }) {
   const rows = []
   let isFirstRow = true
@@ -186,8 +213,14 @@ function MarkdownTablePreview({ lines }) {
 }
 
 // ─── Parser de conteúdo ──────────────────────────────────────────────────
-function parseSectionContent(rawContent, onChartTypeChange) {
+function parseSectionContent(rawContent, onChartTypeChange, sectionId) {
   if (!rawContent) return []
+
+  if (sectionId === 'indice') {
+    const normalized = normalizeIndiceContent(rawContent)
+    return [<IndiceListPreview key="indice-list" content={normalized} />]
+  }
+
   // Defesa em camadas: sanitiza ANTES de renderizar para garantir que
   // qualquer ##, ---, **inline**, &nbsp; que tenha escapado dos prompts
   // não apareça como símbolo cru no editor.
@@ -427,11 +460,14 @@ export default function ProjectEditor() {
   // ─── Edit ──────────────────────────────────────────────────────────────
   const handleEditSection = (sectionId) => {
     setEditingSection(sectionId)
-    setEditContent(project?.sections?.[sectionId] || '')
+    const raw = project?.sections?.[sectionId] || ''
+    setEditContent(sectionId === 'indice' ? normalizeIndiceContent(raw) : raw)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }
   const handleSaveSection = async () => {
-    const updatedSections = { ...project.sections, [editingSection]: editContent }
+    const saved =
+      editingSection === 'indice' ? normalizeIndiceContent(editContent) : editContent
+    const updatedSections = { ...project.sections, [editingSection]: saved }
     const { error } = await supabase.from('projects').update({ sections: updatedSections }).eq('id', id)
     if (error) toast.error('Erro ao salvar')
     else { setProject((prev) => ({ ...prev, sections: updatedSections })); toast.success('Secção actualizada') }
@@ -888,7 +924,7 @@ export default function ProjectEditor() {
                     <div className="rounded-3xl bg-white border border-dark-100 shadow-sm p-6 sm:p-8 lg:p-10">
                       <div className="prose prose-slate prose-sm sm:prose-base max-w-none prose-headings:text-dark-900 prose-headings:font-display prose-headings:font-extrabold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-p:text-dark-700 prose-a:text-primary-600 prose-strong:text-dark-900 prose-strong:font-bold">
                         {sectionContent ? (
-                          parseSectionContent(sectionContent, handleChartTypeChange)
+                          parseSectionContent(sectionContent, handleChartTypeChange, activeSection)
                         ) : (
                           <div className="text-center py-12">
                             <Sparkles className="w-10 h-10 text-dark-300 mx-auto mb-3" />

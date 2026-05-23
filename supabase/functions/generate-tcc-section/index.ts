@@ -82,7 +82,7 @@ O texto vai directamente para um documento Word académico. PROIBIDO usar marca�
 15. NUNCA use o símbolo asterisco (*) em qualquer parte do documento — nem para listas, nem para ênfase, nem para separadores. Prefira parágrafos corridos ou bullet "•" quando for estritamente necessária uma lista (máximo 3-5 itens).
 16. NUNCA use linhas de separação horizontal com hífens, asteriscos ou underscores. Se quiser separar ideias, basta deixar uma linha em branco.
 17. NUNCA use blockquotes "> texto". Prefira parágrafos corridos.
-18. NUNCA use entidades HTML como "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>. Use apenas texto puro.
+18. NUNCA use entidades HTML como &nbsp;, &amp;, &#160;, &lt;, &gt; ou tags HTML como br, p, strong. Use apenas texto puro com espaços normais.
 19. NUNCA use código inline com backticks (\`texto\`). Para nomes técnicos use aspas simples 'NomeTécnico'.
 20. NUNCA use links Markdown [texto](url). Para citar fontes electrónicas, escreva: "Disponível em: https://exemplo.com (consultado em DD/MM/AAAA)".
 21. PERMITIDO E NECESSÁRIO: tabelas em Markdown clássico com pipes (| Coluna | Coluna |) — o exportador converte em tabela Word formatada; blocos fenced com chart e mermaid (convertidos em imagens); legendas no formato Figura N: ou Tabela N: (sem asteriscos).
@@ -361,9 +361,10 @@ Gere o ABSTRACT (versão em inglês do resumo) do TCC. Deve:
 
 Gere o ÍNDICE/SUMÁRIO completo e detalhado do ${projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'}.
 
-REGRAS DE FORMATO OBRIGATÓRIAS (o documento será exportado para Word com índice interactivo — hiperligações clicáveis para cada secção; pontilhado e número de página alinhado à direita):
-- Devolve apenas a LISTA de entradas, uma por linha (texto simples).
-- NÃO uses tabelas Markdown (nada de "|" nem de "---"), NÃO uses "##", asteriscos (*), nem hífens decorativos.
+REGRAS DE FORMATO OBRIGATÓRIAS (o documento será exportado para Word com índice interactivo — hiperligações clicáveis; pontilhado e número de página à direita):
+- FORMATO PROIBIDO: tabelas (incluindo Markdown com pipes "|", colunas, cabeçalhos "Secção | Página", ou qualquer grelha). Se usares tabela, o documento será rejeitado.
+- FORMATO OBRIGATÓRIO: lista simples — uma entrada por linha, só texto e número de página no fim.
+- NÃO uses "|", "---", "##", asteriscos (*), entidades HTML (&nbsp;, &amp;, etc.) nem hífens decorativos.
 - Cada linha deve terminar com o número da página estimado (inteiro). Formato: "TÍTULO DA SECÇÃO    PÁGINA". Separa o título da página por um único espaço, sem pontilhado manual (o exportador adiciona o pontilhado automaticamente).
 - Os títulos das entradas devem coincidir EXACTAMENTE com os títulos usados no corpo do trabalho (mesma numeração e redacção), para que as hiperligações funcionem no Word.
 - Mantém a indentação por níveis através da numeração (1., 1.1., 1.1.1.). Não uses espaços iniciais para indentar — a indentação é aplicada pelo exportador a partir da numeração.
