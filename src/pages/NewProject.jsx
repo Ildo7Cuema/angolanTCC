@@ -288,7 +288,9 @@ export default function NewProject() {
     if (!title || title.trim().length < 10) return
     setGenerating(true); setAiGenerated(false)
 
-    const prompt = `Você é um especialista académico angolano em orientação de Trabalhos de Conclusão de Curso (TCC).
+    const prompt = `/GHOST
+
+Você é um especialista académico angolano em orientação de Trabalhos de Conclusão de Curso (TCC).
 
 Com base no título do TCC abaixo, gera em Português de Angola (pré-Acordo Ortográfico, DESCARTANDO totalmente o Novo Acordo Ortográfico da Língua Portuguesa, escrevendo por exemplo: "objectivo", "projecto", "acção") (sem usar "você", use "o estudante"):
 
@@ -343,7 +345,9 @@ Responde APENAS com um JSON válido no seguinte formato, sem texto extra:
 
     setLoadingSuggestions(true); setShowSuggestions(true)
 
-    const prompt = `Você é um especialista académico angolano. O estudante está a escrever o título do seu ${docLabel} e digitou até agora: "${partialTitle}".
+    const prompt = `/GHOST
+
+Você é um especialista académico angolano. O estudante está a escrever o título do seu ${docLabel} e digitou até agora: "${partialTitle}".
 ${course ? `Curso: ${course}.` : ''}${university ? ` Universidade: ${university}.` : ''}${knowledgeArea ? ` Área/Campo de Conhecimento: ${knowledgeArea}.` : ''}
 
 Com base no que foi escrito, gere exactamente 5 sugestões de títulos académicos completos e polidos que:
@@ -380,7 +384,9 @@ Responde APENAS com JSON válido neste formato, sem texto extra:
     const areaClause = knowledgeArea ? `, com foco específico na área de "${knowledgeArea}"` : ''
     const areaRule   = knowledgeArea ? `\n- Todos os títulos devem estar relacionados com a área de "${knowledgeArea}".` : ''
 
-    const prompt = `Você é um especialista académico angolano. Gere exactamente 6 ideias de títulos de ${docLabel} para um estudante do curso de "${course}" na ${university}${areaClause}.
+    const prompt = `/GHOST
+
+Você é um especialista académico angolano. Gere exactamente 6 ideias de títulos de ${docLabel} para um estudante do curso de "${course}" na ${university}${areaClause}.
 
 Regras: relevantes para Angola 2024/2025, académicos, específicos, pré-Acordo Ortográfico, variados em abordagem (impacto, análise, estratégia, avaliação, etc.).${areaRule}
 Responde APENAS com JSON: {"suggestions":["t1","t2","t3","t4","t5","t6"]}`

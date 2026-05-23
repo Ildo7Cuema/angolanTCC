@@ -3,7 +3,14 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { generateSection, generateAllSections, traduzirErroIA, humanizeSection, summarizeAllSections } from '../lib/generateSection'
+import {
+  generateSection,
+  generateAllSections,
+  traduzirErroIA,
+  humanizeSection,
+  summarizeAllSections,
+  getSummarizableSectionIds,
+} from '../lib/generateSection'
 import { exportToDocx } from '../lib/exportDocx'
 import { sanitizeAIContent } from '../lib/sanitizeContent'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -467,14 +474,17 @@ export default function ProjectEditor() {
     setSummarizing(true)
     setSummarizeProgress({ done: 0, total: 0, current: '' })
 
-    // Conta apenas as secções que serão resumidas
-    const summarizableIds = Object.keys(project.sections).filter(
-      (id) => typeof project.sections[id] === 'string' && project.sections[id].trim().length > 0,
-    )
+    const projectType = project.sections?.projectType || 'tcc'
+    const summarizableIds = getSummarizableSectionIds(project.sections, projectType)
+    if (summarizableIds.length === 0) {
+      toast.error('Não há secções com conteúdo suficiente para resumir.')
+      setSummarizing(false)
+      return
+    }
     setSummarizeProgress({ done: 0, total: summarizableIds.length, current: '' })
 
     try {
-      const summarized = await summarizeAllSections(
+      const { sections: summarizedSections, failures } = await summarizeAllSections(
         project.sections,
         {
           level: summarizeLevel,
@@ -482,12 +492,15 @@ export default function ProjectEditor() {
             const def = activeSections.find((s) => s.id === sectionId)
             setSummarizeProgress({ done: index + 1, total, current: def?.title || sectionId })
           },
-          onError: (sectionId, errMsg) => {
-            const def = activeSections.find((s) => s.id === sectionId)
-            toast.error(`Falha ao resumir "${def?.title || sectionId}": ${traduzirErroIA(errMsg)}`)
-          },
         },
       )
+
+      if (failures.length === summarizableIds.length) {
+        toast.error('Não foi possível resumir nenhuma secção. Verifica a ligação e o deploy da função summarize-tcc-section.')
+        setSummarizing(false)
+        setSummarizeProgress({ done: 0, total: 0, current: '' })
+        return
+      }
 
       // Cria um novo projecto resumido — preserva o original
       const summaryTag = summarizeLevel === 'compact'
@@ -512,8 +525,7 @@ export default function ProjectEditor() {
           status: 'completed',
           source_project_id: project.id,
           sections: {
-            ...project.sections,
-            ...summarized,
+            ...summarizedSections,
             is_summary: true,
             summary_level: summarizeLevel,
             summarized_from: project.id,
@@ -525,17 +537,29 @@ export default function ProjectEditor() {
       if (insertErr || !newProject) {
         toast.error(`Erro ao salvar projecto resumido: ${insertErr?.message || 'Tente novamente'}`)
       } else {
-        // Cria entrada de pagamento já como "pago" (resumo derivado de
-        // projecto pago — não cobramos extra)
         const refCode = 'RES-' + Math.random().toString(36).substring(2, 7).toUpperCase()
-        await supabase.from('payments').insert({
+        const { error: payErr } = await supabase.from('payments').insert({
           user_id: user.id,
           project_id: newProject.id,
           amount: 0,
           reference_code: refCode,
           status: 'pago',
         })
-        toast.success('Resumo criado com sucesso! A abrir...')
+        if (payErr) {
+          console.warn('Pagamento do resumo não registado:', payErr.message)
+        }
+
+        if (failures.length > 0) {
+          const names = failures
+            .map((f) => activeSections.find((s) => s.id === f.sectionId)?.title || f.sectionId)
+            .join(', ')
+          toast(
+            `Resumo criado. ${failures.length} secção(ões) mantiveram o texto original: ${names}.`,
+            { duration: 8000, icon: '⚠️' },
+          )
+        } else {
+          toast.success('Resumo criado com sucesso! A abrir...')
+        }
         setShowSummarizeModal(false)
         navigate(`/project/${newProject.id}`)
       }

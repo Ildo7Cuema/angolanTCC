@@ -94,6 +94,9 @@ function stripInlineMarkdown(text) {
     // Itálico *texto* ou _texto_  (só quando rodeado por espaço/início)
     .replace(/(^|[^\w*])\*([^\s*][^*\n]*?)\*(?=[^\w*]|$)/g, '$1$2')
     .replace(/(^|[^\w_])_([^\s_][^_\n]*?)_(?=[^\w_]|$)/g, '$1$2')
+    // Asteriscos residuais (listas *, ênfase solta)
+    .replace(/^\*\s+/gm, '• ')
+    .replace(/\*/g, '')
     // Riscado ~~texto~~
     .replace(/~~([^\n~]+?)~~/g, '$1')
     // Código inline `texto`

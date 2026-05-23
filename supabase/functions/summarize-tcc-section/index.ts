@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +22,9 @@ const corsHeaders = {
  *   - 'light'   → ~70% do tamanho original (resumo suave)
  */
 
-const SYSTEM_PROMPT = `Você é um editor académico angolano com mais de 15 anos de experiência em condensação de textos científicos. A sua tarefa é REDUZIR a extensão de uma secção de TCC mantendo intacto o rigor académico, a estrutura argumentativa e todas as citações de autores reais.
+const SYSTEM_PROMPT = `/GHOST
+
+Você é um editor académico angolano com mais de 15 anos de experiência em condensação de textos científicos. A sua tarefa é REDUZIR a extensão de uma secção de TCC mantendo intacto o rigor académico, a estrutura argumentativa e todas as citações de autores reais.
 
 REGRAS ABSOLUTAS DE RESUMO:
 1. PRESERVAR INTEGRALMENTE: todas as citações de autores reais (ex: "Segundo Gil (2002)..."), todas as referências bibliográficas, todos os números, datas, percentagens e dados estatísticos, todos os blocos \`\`\`chart e \`\`\`mermaid, todas as tabelas em pipes Markdown, e todas as legendas no formato **Figura N:** ou **Tabela N:**.
@@ -35,14 +37,87 @@ REGRAS ABSOLUTAS DE RESUMO:
 REGRAS CRÍTICAS DE FORMATAÇÃO — TEXTO LIMPO (LEIA COM ATENÇÃO):
 O texto vai directamente para um documento Word académico. PROIBIDO usar marcação Markdown ornamental:
 7. NUNCA cabeçalhos com cardinal "##", "###". Títulos em MAIÚSCULAS na própria linha (ex: "1.1. CONTEXTUALIZAÇÃO DO TEMA").
-8. NUNCA negrito **texto** ou itálico *texto* ou __texto__ ou ~~texto~~ no meio do texto. ÚNICA EXCEPÇÃO: **Figura N:** e **Tabela N:** nas legendas.
-9. NUNCA linhas de separação "---", "***", "___".
-10. NUNCA entidades HTML "&nbsp;", "&amp;", nem tags HTML <br>, <p>, <strong>.
-11. NUNCA backticks \`texto\` para código inline.
-12. NUNCA links Markdown [texto](url).
-13. PERMITIDO: tabelas em pipes Markdown, blocos \`\`\`chart, blocos \`\`\`mermaid, legendas **Figura N:** / **Tabela N:**.
+8. NUNCA negrito, itálico ou outra marcação Markdown no meio do texto. Legendas: Figura N: ou Tabela N: (sem asteriscos).
+9. NUNCA use o símbolo asterisco (*) em qualquer parte do documento.
+10. NUNCA linhas de separação com hífens, asteriscos ou underscores.
+11. NUNCA entidades HTML "&nbsp;", "&amp;", nem tags HTML <br>, <p>, <strong>.
+12. NUNCA backticks \`texto\` para código inline.
+13. NUNCA links Markdown [texto](url).
+14. PERMITIDO: tabelas em pipes Markdown, blocos \`\`\`chart, blocos \`\`\`mermaid, legendas Figura N: / Tabela N:.
 
 DEVOLVER apenas o texto resumido, sem comentários, prefácios ou notas explicativas.`;
+
+const MIN_WORDS_TO_SUMMARIZE = 40;
+const MAX_WORDS_PER_CHUNK = 3500;
+
+function splitForSummarization(text: string): string[] {
+  const trimmed = text.trim();
+  const words = trimmed.split(/\s+/);
+  if (words.length <= MAX_WORDS_PER_CHUNK) return [trimmed];
+
+  const chunks: string[] = [];
+  const paragraphs = trimmed.split(/\n\n+/);
+  let current = "";
+  let currentWords = 0;
+
+  for (const para of paragraphs) {
+    const paraWords = para.trim() ? para.trim().split(/\s+/).length : 0;
+    if (currentWords > 0 && currentWords + paraWords > MAX_WORDS_PER_CHUNK) {
+      chunks.push(current.trim());
+      current = para;
+      currentWords = paraWords;
+    } else {
+      current = current ? `${current}\n\n${para}` : para;
+      currentWords += paraWords;
+    }
+  }
+
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.length > 0 ? chunks : [trimmed];
+}
+
+async function callAnthropicSummarize(
+  apiKey: string,
+  system: string,
+  userMessage: string,
+): Promise<{ text: string; error?: string; status?: number }> {
+  const MODELS = [
+    { id: "claude-sonnet-4-6", maxTokens: 8000 },
+    { id: "claude-haiku-4-5", maxTokens: 8000 },
+  ];
+
+  let lastError = "";
+  for (const model of MODELS) {
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: model.id,
+        max_tokens: model.maxTokens,
+        temperature: 0.5,
+        system,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+
+    const payload = await anthropicRes.json().catch(() => ({}));
+    if (anthropicRes.ok) {
+      const text = payload?.content?.[0]?.text || "";
+      if (text) return { text };
+    }
+
+    lastError = payload?.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
+    if (anthropicRes.status === 401 || anthropicRes.status === 403 || anthropicRes.status === 429) {
+      return { text: "", error: lastError, status: anthropicRes.status };
+    }
+  }
+
+  return { text: "", error: lastError || "Não foi possível obter resposta da IA." };
+}
 
 function buildLevelInstruction(level: string, originalWordCount: number): string {
   const ratios: Record<string, number> = {
@@ -102,65 +177,56 @@ Deno.serve(async (req: Request) => {
       return jsonError("O nível de resumo deve ser 'compact', 'medium' ou 'light'.", 400);
     }
 
-    const wordCount = originalText.trim().split(/\s+/).length;
-    const levelInstruction = targetWords
-      ? `Nível de resumo solicitado: PERSONALIZADO. Texto original tem aproximadamente ${wordCount} palavras. Texto resumido deve ter aproximadamente ${targetWords} palavras (com tolerância de ±15%). Mantém a profundidade académica — condensa a forma, não o conteúdo essencial.`
-      : buildLevelInstruction(level, wordCount);
+    const trimmedText = originalText.trim();
+    const wordCount = trimmedText.split(/\s+/).length;
 
-    const userMessage = `Resume o seguinte texto da secção "${sectionId || 'do TCC'}" aplicando todas as regras absolutas e de formatação definidas no system prompt.
+    if (wordCount < MIN_WORDS_TO_SUMMARIZE) {
+      return new Response(JSON.stringify({ text: trimmedText, sectionId, level, skipped: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const chunks = splitForSummarization(trimmedText);
+    const summarizedParts: string[] = [];
+
+    for (let c = 0; c < chunks.length; c++) {
+      const chunk = chunks[c];
+      const chunkWords = chunk.split(/\s+/).length;
+      const levelInstruction = targetWords
+        ? `Nível de resumo solicitado: PERSONALIZADO. Este fragmento tem ~${chunkWords} palavras. Texto resumido ~${Math.max(80, Math.round(targetWords / chunks.length))} palavras (±15%).`
+        : buildLevelInstruction(level, chunkWords);
+
+      const partLabel = chunks.length > 1
+        ? ` (parte ${c + 1} de ${chunks.length})`
+        : "";
+
+      const userMessage = `Resume o seguinte texto da secção "${sectionId || "do TCC"}"${partLabel}, aplicando todas as regras absolutas e de formatação definidas no system prompt.
 
 ${levelInstruction}
 
 Texto original:
 
-${originalText}`;
+${chunk}`;
 
-    // Limites de tokens generosos — o output será mais curto que o input
-    // mas precisa folga para textos muito longos.
-    const MODELS = [
-      { id: "claude-sonnet-4-6", maxTokens: 8000 },
-      { id: "claude-haiku-4-5",  maxTokens: 8000 },
-    ];
+      const { text: partText, error, status } = await callAnthropicSummarize(
+        apiKey,
+        SYSTEM_PROMPT,
+        userMessage,
+      );
 
-    let text = "";
-    let lastError = "";
-
-    for (const model of MODELS) {
-      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: model.id,
-          max_tokens: model.maxTokens,
-          temperature: 0.5, // baixa criatividade — queremos fidelidade ao original
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }],
-        }),
-      });
-
-      const payload = await anthropicRes.json().catch(() => ({}));
-
-      if (anthropicRes.ok) {
-        text = payload?.content?.[0]?.text || "";
-        if (text) break;
+      if (status === 401 || status === 403 || status === 429) {
+        return jsonError(error || "Erro de autenticação ou quota da IA.", status);
+      }
+      if (!partText) {
+        return jsonError(error || "Não foi possível obter resposta da IA.", 500);
       }
 
-      lastError = payload?.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
-
-      if (anthropicRes.status === 401 || anthropicRes.status === 403 || anthropicRes.status === 429) {
-        return jsonError(lastError, anthropicRes.status);
-      }
+      summarizedParts.push(partText.trim());
     }
 
-    if (!text) {
-      return jsonError(lastError || "Não foi possível obter resposta da IA.", 500);
-    }
+    const text = summarizedParts.join("\n\n");
 
-    return new Response(JSON.stringify({ text, sectionId, level }), {
+    return new Response(JSON.stringify({ text, sectionId, level, chunks: chunks.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

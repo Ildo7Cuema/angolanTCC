@@ -1,11 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+const SYSTEM_PROMPT = `/GHOST
+
+Você é um assistente especializado em trabalhos académicos angolanos (TCC, Ante-Projectos, Monografias).
+Use sempre a norma pré-Acordo Ortográfico angolana (objectivo, projecto, acção).
+Nunca use "você". Nunca use o símbolo asterisco (*) nem marcação Markdown ornamental.
+Responda apenas ao que foi pedido, sem texto extra.`;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -61,6 +68,7 @@ Deno.serve(async (req: Request) => {
         model: "claude-haiku-4-5",
         max_tokens: 1024,
         temperature: 0.7,
+        system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: prompt }],
       }),
     });

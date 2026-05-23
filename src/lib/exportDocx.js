@@ -27,6 +27,10 @@ import {
   TableRow,
   TableCell,
   WidthType,
+  TabStopType,
+  LeaderType,
+  Bookmark,
+  InternalHyperlink,
 } from 'docx'
 import { saveAs } from 'file-saver'
 import { supabase } from './supabase'
@@ -79,6 +83,90 @@ function detectHeading(line) {
   return null
 }
 
+/** Chave normalizada para associar títulos do índice a bookmarks no corpo. */
+function normalizeBookmarkKey(text) {
+  return text
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[–—-]/g, '-')
+}
+
+/**
+ * Percorre todas as secções e regista bookmarks nos títulos detectados,
+ * para o índice poder ligar hiperligações clicáveis no Word.
+ */
+function collectHeadingBookmarks(sections, activeSections) {
+  const map = new Map()
+  let counter = 0
+
+  for (const sectionDef of activeSections) {
+    if (sectionDef.id === 'capa' || sectionDef.id === 'indice') continue
+
+    if (sectionDef.docxTitle) {
+      const sectionKey = normalizeBookmarkKey(sectionDef.docxTitle)
+      if (sectionKey && !map.has(sectionKey)) {
+        counter++
+        map.set(sectionKey, `_bm_${counter}`)
+      }
+    }
+
+    const content = sections?.[sectionDef.id]
+    if (!content) continue
+
+    for (const raw of sanitizeAIContent(content).split('\n')) {
+      const line = raw.trim()
+      if (!line || !detectHeading(line)) continue
+
+      const key = normalizeBookmarkKey(line)
+      if (!key || map.has(key)) continue
+
+      counter++
+      const bookmarkId = `_bm_${counter}`
+      map.set(key, bookmarkId)
+
+      const withoutNum = line.replace(/^[0-9]+(?:\.[0-9]+)*\.?\s+/, '').trim()
+      if (withoutNum) {
+        const subKey = normalizeBookmarkKey(withoutNum)
+        if (subKey && !map.has(subKey)) map.set(subKey, bookmarkId)
+      }
+    }
+  }
+
+  return map
+}
+
+function findBookmarkForTitle(title, bookmarkMap) {
+  if (!bookmarkMap?.size) return null
+  const key = normalizeBookmarkKey(title)
+  if (bookmarkMap.has(key)) return bookmarkMap.get(key)
+
+  const withoutNum = title.replace(/^[0-9]+(?:\.[0-9]+)*\.?\s+/, '').trim()
+  const subKey = normalizeBookmarkKey(withoutNum)
+  if (bookmarkMap.has(subKey)) return bookmarkMap.get(subKey)
+
+  return null
+}
+
+function makeHeadingChildren(text, bookmarkId, textRunOptions) {
+  const run = new TextRun({ text, ...textRunOptions })
+  if (bookmarkId) {
+    return [new Bookmark({ id: bookmarkId, children: [run] })]
+  }
+  return [run]
+}
+
+function makeIndiceTitleChild(title, bookmarkMap, textRunOptions) {
+  const anchor = findBookmarkForTitle(title, bookmarkMap)
+  const run = new TextRun({ text: title, ...textRunOptions })
+  if (anchor) {
+    return new InternalHyperlink({ anchor, children: [run] })
+  }
+  return run
+}
+
 // Estilo de borda padrão para células de tabela
 const CELL_BORDER = { style: 'single', size: 4, color: 'AAAAAA' }
 const CELL_BORDERS = { top: CELL_BORDER, bottom: CELL_BORDER, left: CELL_BORDER, right: CELL_BORDER }
@@ -129,6 +217,226 @@ function createMarkdownTable(lines) {
       insideV: CELL_BORDER,
     },
   })
+}
+
+// ─── Índice em formato clássico Word ────────────────────────────────────────
+
+/**
+ * Posição (em twips) da tabulação à direita usada nas linhas do Índice.
+ * Com margens 30mm/20mm em A4 (210mm) restam ≈ 160mm de largura útil.
+ * 160mm ≈ 9070 twips, mas mantemos abaixo de TabStopPosition.MAX (9026).
+ */
+const INDICE_RIGHT_TAB = 9000
+
+/**
+ * Detecta o nível hierárquico de uma entrada do índice a partir da
+ * numeração (ex: "1." → 0, "1.1." → 1, "1.1.1." → 2). Linhas sem
+ * numeração ficam ao nível 0.
+ */
+function indiceLevelFromPrefix(prefix) {
+  if (!prefix) return 0
+  // Conta apenas pontos internos (ignora o ponto terminal opcional)
+  const cleaned = prefix.replace(/\.$/, '')
+  const dotCount = (cleaned.match(/\./g) || []).length
+  return dotCount
+}
+
+/**
+ * Parse robusto de uma linha do índice. Aceita:
+ *  - "1.2. Título ............ 12"
+ *  - "1.2. Título — 12"
+ *  - "1.2. Título"             (sem página)
+ *  - "CAPÍTULO I – INTRODUÇÃO"  (entrada de capítulo, sem numeração decimal)
+ *  - "RESUMO"                   (entrada estruturada em maiúsculas)
+ *
+ * Devolve `null` se a linha não parecer uma entrada de índice válida.
+ */
+function parseIndiceLine(rawLine) {
+  let line = rawLine.trim()
+  if (!line) return null
+
+  // Remove pontilhados/decorações no meio da linha antes de extrair página
+  // (ex: "Introdução .......... 5" → "Introdução   5")
+  line = line.replace(/\s*[.·•‧⋅‥…]{2,}\s*/g, ' ')
+
+  // Extrai a página no final da linha (número isolado depois de espaço,
+  // travessão ou tab). Tolera ausência de página.
+  let page = ''
+  const pageMatch = line.match(/[\s\u2013\u2014\u2212\-]+(\d{1,4})\s*$/)
+  if (pageMatch) {
+    page = pageMatch[1]
+    line = line.slice(0, pageMatch.index).trimEnd()
+  }
+
+  // Identifica numeração inicial tipo "1.", "1.1.", "1.1.1." ou "A.", "I."
+  const numMatch = line.match(/^([0-9]+(?:\.[0-9]+)*\.?)\s+(.+)$/)
+  let level = 0
+  let title = line
+
+  if (numMatch) {
+    const prefix = numMatch[1]
+    level = indiceLevelFromPrefix(prefix)
+    title = `${prefix} ${numMatch[2]}`.trim()
+  } else {
+    // Entradas em MAIÚSCULAS sem numeração (CAPA, RESUMO, REFERÊNCIAS…)
+    const isUpper = line === line.toUpperCase() && /[A-ZÀ-Ü]/.test(line)
+    if (isUpper) {
+      level = 0
+    } else {
+      // Sub-secção sem numeração: indenta levemente.
+      level = 1
+    }
+  }
+
+  return { title, page, level }
+}
+
+/**
+ * Extrai entradas do índice quando a IA devolveu uma tabela Markdown
+ * (`| Secção | Página |`). Junta colunas extras à primeira (título)
+ * e usa a última coluna como página, se for numérica.
+ */
+function parseIndiceFromMarkdownTable(lines) {
+  const entries = []
+  let isFirstRow = true
+
+  for (const raw of lines) {
+    // Ignora separadores tipo |---|---|
+    if (/^[\s|:\-]+$/.test(raw.replace(/[|]/g, ''))) continue
+
+    const stripped = raw.replace(/^\|/, '').replace(/\|$/, '')
+    const cols = stripped.split('|').map((c) => c.trim()).filter(Boolean)
+    if (cols.length === 0) continue
+
+    // Salta o cabeçalho (Secção | Página, etc.)
+    if (isFirstRow) {
+      isFirstRow = false
+      const looksLikeHeader = cols.some((c) => /^(secç|seção|capítulo|item|conteúdo|título|p[áa]g)/i.test(c))
+      if (looksLikeHeader) continue
+    }
+
+    // Última coluna = página (se numérica), restante = título.
+    let page = ''
+    let titleCols = cols
+    const last = cols[cols.length - 1]
+    if (/^\d{1,4}$/.test(last)) {
+      page = last
+      titleCols = cols.slice(0, -1)
+    }
+    const rebuilt = titleCols.join(' ').trim()
+    if (!rebuilt) continue
+
+    const parsed = parseIndiceLine(`${rebuilt}${page ? ` ${page}` : ''}`)
+    if (parsed) entries.push(parsed)
+  }
+  return entries
+}
+
+/**
+ * Constrói os parágrafos do Word para a secção ÍNDICE no formato clássico
+ * do Microsoft Word: título à esquerda, pontilhado a preencher o meio, e
+ * o número de página alinhado à direita (via TabStop com LeaderType.DOT).
+ *
+ * Aceita o conteúdo bruto da IA — quer venha em tabela Markdown, quer
+ * venha em lista hierárquica de texto. Linhas que não pareçam entradas
+ * de índice são ignoradas silenciosamente.
+ *
+ * @param {string} content    Conteúdo bruto vindo da IA
+ * @param {string} FONT_USE   Fonte do perfil da universidade
+ * @param {number} LINE_SPACING Espaçamento de linha em twips
+ * @param {Map<string,string>} [bookmarkMap] Mapa título → id de bookmark
+ * @returns {Paragraph[]}
+ */
+function buildIndiceParagraphs(content, FONT_USE, LINE_SPACING, bookmarkMap) {
+  const paragraphs = []
+
+  // Título da secção (mantido aqui para garantir formatação igual às outras)
+  paragraphs.push(new Paragraph({
+    children: [new TextRun({
+      text: 'ÍNDICE',
+      font: FONT_USE,
+      size: FONT_SIZE_TITLE,
+      bold: true,
+      color: '000000',
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 600, after: 400, line: LINE_SPACING },
+    heading: HeadingLevel.HEADING_1,
+    pageBreakBefore: true,
+  }))
+
+  const rawLines = (content || '').split('\n').map((l) => l.trim())
+
+  // Detecta se a IA devolveu o índice como tabela Markdown e usa parser
+  // dedicado nesse caso.
+  const tableLines = rawLines.filter((l) => l.startsWith('|'))
+  const isMarkdownTable = tableLines.length >= 2
+
+  let entries = []
+  if (isMarkdownTable) {
+    entries = parseIndiceFromMarkdownTable(tableLines)
+  } else {
+    for (const line of rawLines) {
+      if (!line) continue
+      // Filtra a própria palavra "ÍNDICE" / "SUMÁRIO" se aparecer no corpo
+      if (/^(ÍNDICE|SUMÁRIO|ÍNDICE\s+GERAL)$/i.test(line)) continue
+      // Filtra notas/observações (parêntesis) ou linhas decorativas
+      if (line.startsWith('(') || /^[-=_*]{3,}$/.test(line)) continue
+
+      const parsed = parseIndiceLine(line)
+      if (parsed && parsed.title) entries.push(parsed)
+    }
+  }
+
+  // Indentação por nível (em twips). Nível 0 = sem indent; cada nível seguinte
+  // acrescenta ~7mm. Mantemos a tab stop à direita constante para que o
+  // pontilhado se prolongue sempre até à margem direita, tal como faz o Word.
+  const INDENT_PER_LEVEL = convertMillimetersToTwip(7)
+
+  for (const entry of entries) {
+    const isMainEntry = entry.level === 0
+    const leftIndent = entry.level * INDENT_PER_LEVEL
+
+    const titleOpts = {
+      font: FONT_USE,
+      size: FONT_SIZE,
+      bold: isMainEntry,
+      color: '000000',
+    }
+
+    paragraphs.push(new Paragraph({
+      children: [
+        makeIndiceTitleChild(entry.title, bookmarkMap, titleOpts),
+        new TextRun({
+          text: '\t',
+          font: FONT_USE,
+          size: FONT_SIZE,
+        }),
+        new TextRun({
+          text: entry.page || '',
+          font: FONT_USE,
+          size: FONT_SIZE,
+          bold: isMainEntry,
+          color: '000000',
+        }),
+      ],
+      tabStops: [
+        {
+          type: TabStopType.RIGHT,
+          position: INDICE_RIGHT_TAB,
+          leader: LeaderType.DOT,
+        },
+      ],
+      indent: leftIndent > 0 ? { left: leftIndent } : undefined,
+      spacing: {
+        line: LINE_SPACING,
+        before: isMainEntry ? 120 : 40,
+        after: isMainEntry ? 60 : 20,
+      },
+    }))
+  }
+
+  return paragraphs
 }
 
 /**
@@ -601,7 +909,7 @@ function generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, profile) {
   return elements
 }
 
-async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile) {
+async function sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile, bookmarkMap) {
   const elements = []
   const FONT_USE = profile?.fontFamily || FONT
 
@@ -610,22 +918,27 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     return generateCapaAndFolhaRosto(project, logoBuffer, LINE_SPACING, profile)
   }
 
+  // Override do Índice — renderizado no formato clássico do Microsoft Word
+  // (título à esquerda, pontilhado a meio, página alinhada à direita),
+  // independentemente de a IA ter devolvido tabela Markdown ou lista.
+  if (sectionId === 'indice') {
+    return buildIndiceParagraphs(content || '', FONT_USE, LINE_SPACING, bookmarkMap)
+  }
+
   const activeSections = getSectionsForProject(project?.sections?.projectType)
   const sectionDef = activeSections.find(s => s.id === sectionId)
   const sectionTitle = sectionDef ? sectionDef.docxTitle : null
 
   if (sectionTitle) {
+    const sectionBookmarkId = bookmarkMap?.get(normalizeBookmarkKey(sectionTitle))
     elements.push(
       new Paragraph({
-        children: [
-          new TextRun({
-            text: sectionTitle,
-            font: FONT_USE,
-            size: FONT_SIZE_TITLE,
-            bold: true,
-            color: '000000',
-          }),
-        ],
+        children: makeHeadingChildren(sectionTitle, sectionBookmarkId, {
+          font: FONT_USE,
+          size: FONT_SIZE_TITLE,
+          bold: true,
+          color: '000000',
+        }),
         alignment: AlignmentType.CENTER,
         spacing: { before: 600, after: 400, line: LINE_SPACING },
         heading: HeadingLevel.HEADING_1,
@@ -776,22 +1089,30 @@ async function sectionToElements(sectionId, content, logoBuffer, project, LINE_S
     }
 
     const heading = detectHeading(line)
+    const bookmarkId = bookmarkMap?.get(normalizeBookmarkKey(line))
     if (heading === 'chapter' || heading === 'upper') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE_TITLE, bold: true, color: '000000' })],
+        children: makeHeadingChildren(line, bookmarkId, {
+          font: FONT_USE, size: FONT_SIZE_TITLE, bold: true, color: '000000',
+        }),
         alignment: AlignmentType.LEFT,
         spacing: { line: LINE_SPACING, before: 360, after: 200 },
         heading: HeadingLevel.HEADING_1,
       }))
     } else if (heading === 'sub1') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE_HEADING, bold: true, color: '000000' })],
+        children: makeHeadingChildren(line, bookmarkId, {
+          font: FONT_USE, size: FONT_SIZE_HEADING, bold: true, color: '000000',
+        }),
         spacing: { line: LINE_SPACING, before: 240, after: 120 },
         heading: HeadingLevel.HEADING_2,
       }))
     } else if (heading === 'sub2' || heading === 'sub3') {
       elements.push(new Paragraph({
-        children: [new TextRun({ text: line, font: FONT_USE, size: FONT_SIZE, bold: true, italics: heading === 'sub3', color: '000000' })],
+        children: makeHeadingChildren(line, bookmarkId, {
+          font: FONT_USE, size: FONT_SIZE, bold: true,
+          italics: heading === 'sub3', color: '000000',
+        }),
         spacing: { line: LINE_SPACING, before: 200, after: 100 },
         heading: HeadingLevel.HEADING_3,
       }))
@@ -897,12 +1218,16 @@ export async function exportToDocx(project, sections) {
   // da secção de Metodologia para garantir presença determinística.
   const softwareDev = project?.sections?.software_dev || null
 
+  const bookmarkMap = collectHeadingBookmarks(sections, activeSections)
+
   for (const sectionDef of activeSections) {
     const sectionId = sectionDef.id
     const content = sections?.[sectionId]
     if (!content && sectionId !== 'capa') continue // Capa é gerada independente
 
-    const elements = await sectionToElements(sectionId, content, logoBuffer, project, LINE_SPACING, profile)
+    const elements = await sectionToElements(
+      sectionId, content, logoBuffer, project, LINE_SPACING, profile, bookmarkMap,
+    )
     allElements.push(...elements)
 
     // Apêndice deterministico para projectos de software:

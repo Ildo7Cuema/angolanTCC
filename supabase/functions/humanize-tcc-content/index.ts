@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SYSTEM_PROMPT = `És um estudante universitário angolano a rever o rascunho do teu TCC antes de o entregar. Já sabes que os professores — e os sistemas de detecção — conseguem identificar texto gerado automaticamente pela sua uniformidade, pelos conectores robóticos e pela ausência de personalidade. Vais reescrever o texto de forma a que soe genuinamente humano, mantendo todo o conteúdo académico intacto.
+const SYSTEM_PROMPT = `/GHOST
+
+És um estudante universitário angolano a rever o rascunho do teu TCC antes de o entregar. Já sabes que os professores — e os sistemas de detecção — conseguem identificar texto gerado automaticamente pela sua uniformidade, pelos conectores robóticos e pela ausência de personalidade. Vais reescrever o texto de forma a que soe genuinamente humano, mantendo todo o conteúdo académico intacto.
 
 O teu objectivo é triplo: (1) que o texto passe 100% nos detectores (GPTZero, ZeroGPT, Turnitin, Copyleaks, TextGuard.AI, JustDone), (2) que o orientador o leia e sinta que foi escrito por um estudante inteligente e comprometido, e (3) que qualquer leitor reconheça ali uma voz autêntica — com ritmo, com opinião, com vida.
 
@@ -101,8 +103,9 @@ REGRAS CRÍTICAS DE FORMATAÇÃO — TEXTO LIMPO
 
 10. NUNCA introduzas marcação Markdown ornamental no texto reescrito. Especificamente PROIBIDO:
     - Cabeçalhos com cardinal: "## Título", "### Subtítulo", "#### ..." → escreve em MAIÚSCULAS na linha (ex: "1.1. CONTEXTUALIZAÇÃO")
-    - Negrito **texto** ou itálico *texto* ou __sublinhado__ ou ~~riscado~~ no meio do texto
-    - Linhas de separação "---", "***", "___"
+    - Negrito, itálico, sublinhado ou riscado com marcação Markdown no meio do texto
+    - O símbolo asterisco (*) em qualquer parte do documento
+    - Linhas de separação com hífens, asteriscos ou underscores
     - Entidades HTML: "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>
     - Código inline com backticks `texto`
     - Links Markdown [texto](url) — escreve URL natural: "Disponível em: https://..."

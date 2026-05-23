@@ -5,6 +5,7 @@
  */
 import { supabase } from './supabase'
 import { sanitizeAIContent } from './sanitizeContent'
+import { getSectionsForProject } from './documentSections'
 
 /**
  * Extrai a mensagem de erro de um FunctionsError do Supabase.
@@ -146,7 +147,64 @@ export async function humanizeSection(sectionId, textToHumanize) {
  * @param {object} options    – { level: 'compact' | 'medium' | 'light', targetWords?: number }
  * @returns {Promise<string>} – Texto resumido (ainda académico)
  */
+const SECTIONS_NOT_TO_SUMMARIZE = new Set([
+  'capa', 'dedicatoria', 'agradecimentos',
+  'resumo', 'abstract', 'indice', 'referencias',
+  'cronograma', 'orcamento',
+])
+
+/** Metadados guardados em `sections` — nunca são texto de secção. */
+const SECTIONS_METADATA_KEYS = new Set([
+  'projectType', 'academic_norm', 'university_city', 'db_structure',
+  'father_name', 'mother_name', 'other_relatives',
+  'is_summary', 'summary_level', 'summarized_from', 'software_dev',
+])
+
+const MIN_WORDS_TO_SUMMARIZE = 40
+
+/**
+ * IDs de secções com conteúdo textual válido que podem ser resumidas.
+ */
+export function getSummarizableSectionIds(sections, projectType = 'tcc') {
+  const validIds = new Set(getSectionsForProject(projectType).map((s) => s.id))
+  return [...validIds].filter((id) => {
+    if (SECTIONS_NOT_TO_SUMMARIZE.has(id)) return false
+    const text = sections[id]
+    return typeof text === 'string' && text.trim().split(/\s+/).length >= MIN_WORDS_TO_SUMMARIZE
+  })
+}
+
+/**
+ * Cópia limpa de `sections` — só strings de secções conhecidas + metadados permitidos.
+ */
+export function buildSectionsSnapshot(sections, projectType = 'tcc') {
+  const validIds = new Set(getSectionsForProject(projectType).map((s) => s.id))
+  const snapshot = {}
+
+  for (const id of validIds) {
+    const text = sections[id]
+    if (typeof text === 'string' && text.trim()) snapshot[id] = text
+  }
+
+  for (const key of SECTIONS_METADATA_KEYS) {
+    if (sections[key] !== undefined && sections[key] !== null) {
+      snapshot[key] = sections[key]
+    }
+  }
+
+  return snapshot
+}
+
 export async function summarizeSection(sectionId, originalText, options = {}) {
+  if (typeof originalText !== 'string' || !originalText.trim()) {
+    throw new Error('Secção sem conteúdo textual para resumir.')
+  }
+
+  const wordCount = originalText.trim().split(/\s+/).length
+  if (wordCount < MIN_WORDS_TO_SUMMARIZE) {
+    return sanitizeAIContent(originalText)
+  }
+
   const data = await callFunction('summarize-tcc-section', {
     sectionId,
     originalText,
@@ -170,18 +228,16 @@ export async function summarizeSection(sectionId, originalText, options = {}) {
  * @param {object} options                  – { level, onProgress, onError }
  * @returns {Promise<Record<string,string>>} – Mapa com secções resumidas
  */
-const SECTIONS_NOT_TO_SUMMARIZE = new Set([
-  'capa', 'dedicatoria', 'agradecimentos',
-  'resumo', 'abstract', 'indice', 'referencias',
-  'cronograma', 'orcamento',
-])
-
+/**
+ * @returns {Promise<{ sections: Record<string, unknown>, failures: Array<{ sectionId: string, message: string }> }>}
+ */
 export async function summarizeAllSections(sections, options = {}) {
-  const { level = 'medium', onProgress, onError } = options
-  const sectionIds = Object.keys(sections).filter((id) => sections[id])
-  const summarizable = sectionIds.filter((id) => !SECTIONS_NOT_TO_SUMMARIZE.has(id))
+  const { level = 'medium', onProgress, onError, onFailures } = options
+  const projectType = sections?.projectType || 'tcc'
+  const summarizable = getSummarizableSectionIds(sections, projectType)
   const total = summarizable.length
-  const result = { ...sections }
+  const result = buildSectionsSnapshot(sections, projectType)
+  const failures = []
 
   for (let i = 0; i < summarizable.length; i++) {
     const sectionId = summarizable[i]
@@ -191,12 +247,15 @@ export async function summarizeAllSections(sections, options = {}) {
       onProgress?.(sectionId, summarized, i, total)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      failures.push({ sectionId, message })
       onError?.(sectionId, message, i)
-      // Mantém versão original se o resumo falhar
+      // Mantém versão original em result (já copiada no snapshot)
     }
   }
 
-  return result
+  if (failures.length > 0) onFailures?.(failures)
+
+  return { sections: result, failures }
 }
 
 /**
@@ -265,6 +324,12 @@ export function traduzirErroIA(detail) {
   }
   if (normalized.includes('compute resources') || normalized.includes('boot deadline') || normalized.includes('resource limit')) {
     return 'A secção excedeu o limite de recursos do servidor. Tente regenerar a secção individualmente.'
+  }
+  if (normalized.includes('inválido') || normalized.includes('vazio') || normalized.includes('invalid')) {
+    return 'Conteúdo da secção inválido ou vazio para resumir.'
+  }
+  if (normalized.includes('function was not found') || normalized.includes('not_found')) {
+    return 'Função summarize-tcc-section não encontrada. Faz deploy: supabase functions deploy summarize-tcc-section'
   }
   if (
     normalized.includes('invalid jwt') ||

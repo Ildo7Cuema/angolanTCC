@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,11 +8,58 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/** Metadados e conteúdo por secção (JSONB `projects.sections`). */
+interface ProjectSections {
+  projectType?: string;
+  academic_norm?: string;
+  db_structure?: string;
+  university_city?: string;
+  father_name?: string;
+  mother_name?: string;
+  other_relatives?: string;
+  software_dev?: SoftwareDevData | null;
+  is_summary?: boolean;
+  summary_level?: string;
+  summarized_from?: string;
+  [sectionId: string]: unknown;
+}
+
+interface SoftwareDevData {
+  class_table_md?: string;
+  use_case_table_md?: string;
+  sequence_table_md?: string;
+  mind_map_md?: string;
+  technologies?: Record<string, string>;
+  system_images?: Array<{ data?: string; mime?: string; name?: string }>;
+  system_image?: string;
+}
+
+interface ProjectData {
+  title?: string;
+  topic?: string;
+  university?: string;
+  course?: string;
+  student_name?: string;
+  advisor?: string;
+  year?: string;
+  problem_statement?: string;
+  methodology?: string;
+  max_pages?: string;
+  sections?: ProjectSections;
+}
+
+interface AnthropicMessagePayload {
+  content?: Array<{ type?: string; text?: string }>;
+  error?: { message?: string };
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Prompts do sistema — especialista académico angolano
    ────────────────────────────────────────────────────────────────────────── */
 
-const SYSTEM_PROMPT = `Você é um especialista académico com mais de 20 anos de experiência na orientação de Trabalhos de Conclusão de Curso (TCC), Ante-Projectos, Monografias e Teses em universidades angolanas.
+const SYSTEM_PROMPT = `/GHOST
+
+Você é um especialista académico com mais de 20 anos de experiência na orientação de Trabalhos de Conclusão de Curso (TCC), Ante-Projectos, Monografias e Teses em universidades angolanas.
 
 REGRAS OBRIGATÓRIAS — QUALIDADE ACADÉMICA:
 1. Escreva SEMPRE na variante angolana, DESCARTANDO TOTALMENTE o Novo Acordo Ortográfico da Língua Portuguesa. Use a norma pré-Acordo. Exemplos: "objectivo", "projecto", "arquitectura", "acção", "direcção", "baptismo", "óptimo", "óptica", "efeito" (NÃO "efeto"), "facto" (NÃO "fato").
@@ -31,13 +78,14 @@ REGRAS OBRIGATÓRIAS — QUALIDADE ACADÉMICA:
 REGRAS CRÍTICAS DE FORMATAÇÃO — SAÍDA EM TEXTO LIMPO (LEIA COM ATENÇÃO):
 O texto vai directamente para um documento Word académico. PROIBIDO usar marcação Markdown ornamental que apareceria como símbolos no documento final. Especificamente:
 13. NUNCA use cabeçalhos Markdown com cardinal: NÃO escreva "## Título", "### Subtítulo", "#### ...". Em vez disso, escreva títulos em MAIÚSCULAS numa linha própria (ex: "1.1. CONTEXTUALIZAÇÃO DO TEMA") ou apenas em maiúsculas se for um capítulo (ex: "CAPÍTULO I – INTRODUÇÃO").
-14. NUNCA use **negrito** ou *itálico* ou __sublinhado__ ou ~~riscado~~ no meio do texto. O exportador formata automaticamente — escreva texto plano. ÚNICA EXCEPÇÃO: legendas de figura/tabela/gráfico no formato exacto **Figura 1:** Descrição (estas o exportador reconhece e centra correctamente).
-15. NUNCA use linhas de separação horizontal "---", "***", "___". Se quiser separar ideias, basta deixar uma linha em branco.
-16. NUNCA use blockquotes "> texto", listas com "* item" ou "- item" excessivamente. Prefira parágrafos corridos. Apenas use bullet "•" ou "- " quando for ESTRITAMENTE necessária uma lista (máximo 3-5 itens).
-17. NUNCA use entidades HTML como "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>. Use apenas texto puro.
-18. NUNCA use código inline com backticks `texto`. Para nomes técnicos use itálico natural (sem marcação) ou aspas simples 'NomeTécnico'.
-19. NUNCA use links Markdown [texto](url). Para citar fontes electrónicas, escreva: "Disponível em: https://exemplo.com (consultado em DD/MM/AAAA)".
-20. PERMITIDO E NECESSÁRIO: tabelas em Markdown clássico com pipes `| Coluna | Coluna |` (o exportador converte em tabela Word formatada), blocos de código com ```chart e ```mermaid (convertidos em imagens), legendas no formato **Figura N:** ou **Tabela N:**.
+14. NUNCA use negrito, itálico, sublinhado ou riscado com marcação Markdown no meio do texto — escreva texto plano. O exportador formata automaticamente.
+15. NUNCA use o símbolo asterisco (*) em qualquer parte do documento — nem para listas, nem para ênfase, nem para separadores. Prefira parágrafos corridos ou bullet "•" quando for estritamente necessária uma lista (máximo 3-5 itens).
+16. NUNCA use linhas de separação horizontal com hífens, asteriscos ou underscores. Se quiser separar ideias, basta deixar uma linha em branco.
+17. NUNCA use blockquotes "> texto". Prefira parágrafos corridos.
+18. NUNCA use entidades HTML como "&nbsp;", "&amp;", "&lt;", "&gt;" ou tags HTML como <br>, <p>, <strong>. Use apenas texto puro.
+19. NUNCA use código inline com backticks (\`texto\`). Para nomes técnicos use aspas simples 'NomeTécnico'.
+20. NUNCA use links Markdown [texto](url). Para citar fontes electrónicas, escreva: "Disponível em: https://exemplo.com (consultado em DD/MM/AAAA)".
+21. PERMITIDO E NECESSÁRIO: tabelas em Markdown clássico com pipes (| Coluna | Coluna |) — o exportador converte em tabela Word formatada; blocos fenced com chart e mermaid (convertidos em imagens); legendas no formato Figura N: ou Tabela N: (sem asteriscos).
 
 REGRAS ANTI-PLÁGIO — ORIGINALIDADE GARANTIDA:
 
@@ -65,7 +113,7 @@ REGRAS DE HUMANIZAÇÃO — TEXTO QUE SOA HUMANO, NÃO ROBÓTICO:
 
 function buildSectionPrompt(
   sectionId: string,
-  projectData: Record<string, string>
+  projectData: ProjectData,
 ): string {
   const title = projectData.title || "Título do TCC";
   const topic = projectData.topic || projectData.title || "Tema do TCC";
@@ -95,23 +143,12 @@ function buildSectionPrompt(
   // Quando preenchidos pelo utilizador no formulário, instruem a IA a gerar
   // Diagramas de Classe, Sequência e Mapas Mentais (em Mermaid) e a
   // referenciar as tecnologias adoptadas.
-  const softwareDev = (projectData?.sections?.software_dev || null) as
-    | {
-        class_table_md?: string;
-        use_case_table_md?: string;
-        sequence_table_md?: string;
-        mind_map_md?: string;
-        technologies?: Record<string, string>;
-        // Novo formato: lista de imagens. Mantemos `system_image` (string)
-        // por retrocompatibilidade com projectos antigos.
-        system_images?: Array<{ data?: string; mime?: string; name?: string }>;
-        system_image?: string;
-      }
-    | null;
+  const softwareDev = projectData.sections?.software_dev ?? null;
 
   // Quantas imagens do sistema o estudante anexou (≥0).
-  const systemImageCount = Array.isArray(softwareDev?.system_images)
-    ? softwareDev!.system_images.filter((i) => i && i.data).length
+  const systemImages = softwareDev?.system_images;
+  const systemImageCount = Array.isArray(systemImages)
+    ? systemImages.filter((img) => img && img.data).length
     : softwareDev?.system_image
       ? 1
       : 0;
@@ -322,79 +359,84 @@ Gere o ABSTRACT (versão em inglês do resumo) do TCC. Deve:
 
     indice: `${context}
 
-Gere o ÍNDICE/SUMÁRIO completo e detalhado do ${projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'} com a seguinte estrutura:
+Gere o ÍNDICE/SUMÁRIO completo e detalhado do ${projectType === 'anteprojecto' ? 'Ante-Projecto' : 'TCC'}.
 
-${projectType === 'anteprojecto' ? `
-CAPA
-ÍNDICE
-1. INTRODUÇÃO
-  1.1. Contextualização do Tema
-  1.2. Problema de Investigação
-  1.3. Objectivos da Investigação
-    1.3.1. Objectivo Geral
-    1.3.2. Objectivos Específicos
-  1.4. Hipóteses
-  1.5. Delimitação do Estudo
-2. JUSTIFICATIVA
-  2.1. Relevância Científica e Académica
-  2.2. Relevância Social e Prática
-  2.3. Viabilidade da Investigação
-3. FUNDAMENTAÇÃO TEÓRICA
-  (gere sub-secções relevantes para o tema "${topic}")
-4. METODOLOGIA
-  4.1. Tipo de Investigação
-  4.2. Métodos e Técnicas
-  4.3. População e Amostra
-  4.4. Instrumentos de Recolha de Dados
-5. CRONOGRAMA
-6. ORÇAMENTO
-REFERÊNCIAS BIBLIOGRÁFICAS` : `
-CAPA
-FOLHA DE ROSTO
-DEDICATÓRIA
-AGRADECIMENTOS
-RESUMO
-ABSTRACT
-ÍNDICE
-LISTA DE FIGURAS
-LISTA DE TABELAS
-LISTA DE ABREVIATURAS
+REGRAS DE FORMATO OBRIGATÓRIAS (o documento será exportado para Word com índice interactivo — hiperligações clicáveis para cada secção; pontilhado e número de página alinhado à direita):
+- Devolve apenas a LISTA de entradas, uma por linha (texto simples).
+- NÃO uses tabelas Markdown (nada de "|" nem de "---"), NÃO uses "##", asteriscos (*), nem hífens decorativos.
+- Cada linha deve terminar com o número da página estimado (inteiro). Formato: "TÍTULO DA SECÇÃO    PÁGINA". Separa o título da página por um único espaço, sem pontilhado manual (o exportador adiciona o pontilhado automaticamente).
+- Os títulos das entradas devem coincidir EXACTAMENTE com os títulos usados no corpo do trabalho (mesma numeração e redacção), para que as hiperligações funcionem no Word.
+- Mantém a indentação por níveis através da numeração (1., 1.1., 1.1.1.). Não uses espaços iniciais para indentar — a indentação é aplicada pelo exportador a partir da numeração.
+- Para entradas sem numeração (CAPA, RESUMO, ABSTRACT, REFERÊNCIAS BIBLIOGRÁFICAS, APÊNDICES, ANEXOS) escreve o nome em MAIÚSCULAS seguido da página.
+- Atribui números de página crescentes e razoáveis (capa = 1, índice ≈ 4-6, primeiro capítulo ≈ 10-14, etc.) — o utilizador pode ajustar manualmente em Word.
 
-CAPÍTULO I – INTRODUÇÃO
-  1.1. Contextualização do Tema
-  1.2. Justificação da Escolha do Tema
-  1.3. Problema de Investigação
-  1.4. Objectivos da Investigação
-    1.4.1. Objectivo Geral
-    1.4.2. Objectivos Específicos
-  1.5. Hipóteses
-  1.6. Delimitação do Estudo
-  1.7. Estrutura do Trabalho
+Estrutura a seguir (mantém esta ordem, ajustando apenas as sub-secções do tema "${topic}"):
 
-CAPÍTULO II – REVISÃO DA LITERATURA
-  (gere sub-secções relevantes para o tema "${topic}")
+${projectType === 'anteprojecto' ? `CAPA 1
+ÍNDICE 2
+1. INTRODUÇÃO 3
+1.1. Contextualização do Tema 3
+1.2. Problema de Investigação 4
+1.3. Objectivos da Investigação 5
+1.3.1. Objectivo Geral 5
+1.3.2. Objectivos Específicos 5
+1.4. Hipóteses 6
+1.5. Delimitação do Estudo 7
+2. JUSTIFICATIVA 8
+2.1. Relevância Científica e Académica 8
+2.2. Relevância Social e Prática 9
+2.3. Viabilidade da Investigação 10
+3. FUNDAMENTAÇÃO TEÓRICA 11
+(gere aqui sub-secções 3.1, 3.2, 3.3… relevantes para o tema "${topic}", uma por linha, com página)
+4. METODOLOGIA 18
+4.1. Tipo de Investigação 18
+4.2. Métodos e Técnicas 19
+4.3. População e Amostra 20
+4.4. Instrumentos de Recolha de Dados 21
+5. CRONOGRAMA 23
+6. ORÇAMENTO 24
+REFERÊNCIAS BIBLIOGRÁFICAS 25` : `CAPA 1
+FOLHA DE ROSTO 2
+DEDICATÓRIA 3
+AGRADECIMENTOS 4
+RESUMO 5
+ABSTRACT 6
+ÍNDICE 7
+LISTA DE FIGURAS 8
+LISTA DE TABELAS 9
+LISTA DE ABREVIATURAS 10
+CAPÍTULO I – INTRODUÇÃO 11
+1.1. Contextualização do Tema 11
+1.2. Justificação da Escolha do Tema 13
+1.3. Problema de Investigação 15
+1.4. Objectivos da Investigação 16
+1.4.1. Objectivo Geral 16
+1.4.2. Objectivos Específicos 16
+1.5. Hipóteses 17
+1.6. Delimitação do Estudo 18
+1.7. Estrutura do Trabalho 19
+CAPÍTULO II – REVISÃO DA LITERATURA 20
+(gere aqui sub-secções 2.1, 2.2, 2.3… relevantes para o tema "${topic}", uma por linha, com página)
+CAPÍTULO III – METODOLOGIA 35
+3.1. Tipo de Investigação 35
+3.2. Métodos e Técnicas de Investigação 36
+3.3. População e Amostra 37
+3.4. Instrumentos de Recolha de Dados 38
+3.5. Tratamento e Análise dos Dados 39
+3.6. Limitações do Estudo 40
+CAPÍTULO IV – RESULTADOS E DISCUSSÃO 41
+4.1. Apresentação dos Resultados 41
+4.2. Análise e Interpretação dos Dados 43
+4.3. Discussão dos Resultados 45
+CAPÍTULO V – CONCLUSÃO 48
+5.1. Considerações Finais 48
+5.2. Recomendações 49
+5.3. Sugestões para Futuras Investigações 50
+REFERÊNCIAS BIBLIOGRÁFICAS 51
+APÊNDICES 55
+ANEXOS 57`}
 
-CAPÍTULO III – METODOLOGIA
-  3.1. Tipo de Investigação
-  3.2. Métodos e Técnicas de Investigação
-  3.3. População e Amostra
-  3.4. Instrumentos de Recolha de Dados
-  3.5. Tratamento e Análise dos Dados
-  3.6. Limitações do Estudo
-
-CAPÍTULO IV – RESULTADOS E DISCUSSÃO
-  4.1. Apresentação dos Resultados
-  4.2. Análise e Interpretação dos Dados
-  4.3. Discussão dos Resultados
-
-CAPÍTULO V – CONCLUSÃO
-  5.1. Considerações Finais
-  5.2. Recomendações
-  5.3. Sugestões para Futuras Investigações
-
-REFERÊNCIAS BIBLIOGRÁFICAS
-APÊNDICES
-ANEXOS`}`,
+Devolve apenas a lista — sem cabeçalhos, sem texto introdutório, sem comentários finais.`,
 
     introducao: `${context}
 
@@ -715,7 +757,7 @@ Deno.serve(async (req: Request) => {
       return jsonError("Campo 'projectData' é obrigatório (dados do projecto).", 400);
     }
 
-    const sectionPrompt = buildSectionPrompt(sectionId, projectData);
+    const sectionPrompt = buildSectionPrompt(sectionId, projectData as ProjectData);
 
     // Section-specific token limits to stay within Edge Function compute budget
     const SECTION_TOKEN_CAPS: Record<string, number> = {
@@ -740,7 +782,7 @@ Deno.serve(async (req: Request) => {
       { id: "claude-haiku-4-5",   maxTokens: Math.min(sectionTokenCap, 8192) },
     ];
 
-    let payload: Record<string, unknown> = {};
+    let payload: AnthropicMessagePayload = {};
     let success = false;
     let lastError = "";
 
@@ -768,7 +810,7 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      lastError = (payload as Record<string, any>)?.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
+      lastError = payload.error?.message || `Erro da IA (HTTP ${anthropicRes.status})`;
 
       // For auth/rate-limit errors, stop immediately (no point trying other models)
       if (anthropicRes.status === 401 || anthropicRes.status === 403 || anthropicRes.status === 429) {
@@ -782,7 +824,7 @@ Deno.serve(async (req: Request) => {
       return jsonError(lastError || "Nenhum modelo de IA disponível. Tente novamente mais tarde.", 502);
     }
 
-    const text = payload?.content?.[0]?.text || "";
+    const text = payload.content?.[0]?.text ?? "";
 
     return new Response(JSON.stringify({ text, sectionId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
