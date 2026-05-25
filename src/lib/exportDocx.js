@@ -35,7 +35,7 @@ import {
 import { saveAs } from 'file-saver'
 import { supabase } from './supabase'
 import { getSectionsForProject } from './documentSections'
-import { sanitizeAIContent } from './sanitizeContent'
+import { sanitizeAIContent, stripMarkdownSymbols, cleanIndiceTitle } from './sanitizeContent'
 import { normalizeIndiceContent } from './indiceContent'
 import { getUniversityProfile, ACADEMIC_NORMS } from './universityProfiles'
 import { buildSoftwareDevDiagrams } from './softwareDevDiagrams'
@@ -196,7 +196,7 @@ function createMarkdownTable(lines) {
             : undefined,
           borders: CELL_BORDERS,
           children: [new Paragraph({
-            children: [new TextRun({ text: c, font: FONT, size: 20, bold: isHeaderRow, color: '000000' })],
+            children: [new TextRun({ text: stripMarkdownSymbols(c), font: FONT, size: 20, bold: isHeaderRow, color: '000000' })],
             alignment: isHeaderRow ? AlignmentType.CENTER : AlignmentType.LEFT,
             spacing: { before: 80, after: 80 }
           })],
@@ -277,7 +277,7 @@ function parseIndiceLine(rawLine) {
   if (numMatch) {
     const prefix = numMatch[1]
     level = indiceLevelFromPrefix(prefix)
-    title = `${prefix} ${numMatch[2]}`.trim()
+    title = `${prefix} ${cleanIndiceTitle(numMatch[2])}`.trim()
   } else {
     // Entradas em MAIÚSCULAS sem numeração (CAPA, RESUMO, REFERÊNCIAS…)
     const isUpper = line === line.toUpperCase() && /[A-ZÀ-Ü]/.test(line)
@@ -287,6 +287,7 @@ function parseIndiceLine(rawLine) {
       // Sub-secção sem numeração: indenta levemente.
       level = 1
     }
+    title = cleanIndiceTitle(line)
   }
 
   return { title, page, level }

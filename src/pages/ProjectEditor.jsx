@@ -12,7 +12,7 @@ import {
   getSummarizableSectionIds,
 } from '../lib/generateSection'
 import { exportToDocx } from '../lib/exportDocx'
-import { sanitizeAIContent } from '../lib/sanitizeContent'
+import { sanitizeAIContent, stripMarkdownSymbols } from '../lib/sanitizeContent'
 import { normalizeIndiceContent } from '../lib/indiceContent'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -202,7 +202,7 @@ function MarkdownTablePreview({ lines }) {
                 : 'border-t border-dark-100 text-dark-700 hover:bg-primary-50/30 transition-colors'}
             >
               {row.cols.map((col, j) => (
-                <td key={j} className="px-4 py-2.5 border-r border-dark-100 last:border-r-0">{col}</td>
+                <td key={j} className="px-4 py-2.5 border-r border-dark-100 last:border-r-0">{stripMarkdownSymbols(col)}</td>
               ))}
             </tr>
           ))}

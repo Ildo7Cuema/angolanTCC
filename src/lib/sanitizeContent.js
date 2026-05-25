@@ -211,3 +211,39 @@ export function stripAllMarkdown(raw) {
   )
   return collapseWhitespace(text)
 }
+
+
+/**
+ * Remove apenas os símbolos de formatação Markdown inline (negrito, itálico, riscado, backticks).
+ * Extremamente seguro para células de tabela e qualquer texto corrido.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+export function stripMarkdownSymbols(str) {
+  if (!str || typeof str !== 'string') return ''
+  return str
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/__/g, '')
+    .replace(/_/g, '')
+    .replace(/~~/g, '')
+    .replace(/`/g, '')
+    .trim()
+}
+
+/**
+ * Limpa completamente um título para o Índice: remove símbolos Markdown
+ * e também marcadores de lista iniciais (hífen, bullet, asterisco, cardinal)
+ * para garantir um alinhamento perfeito.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+export function cleanIndiceTitle(str) {
+  if (!str || typeof str !== 'string') return ''
+  const withoutMarkdown = stripMarkdownSymbols(str)
+  return withoutMarkdown
+    .replace(/^[•\s\-*#·]+\s*/, '') // remove bullets/hifens/cardinais no início
+    .trim()
+}

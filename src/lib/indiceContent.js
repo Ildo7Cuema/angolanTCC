@@ -2,7 +2,7 @@
  * Normalização do conteúdo da secção ÍNDICE.
  * Converte tabelas Markdown em lista de texto simples (formato Word clássico).
  */
-import { sanitizeAIContent } from './sanitizeContent'
+import { sanitizeAIContent, cleanIndiceTitle } from './sanitizeContent'
 
 function parseTableRow(line) {
   if (!line.trim().startsWith('|')) return null
@@ -46,7 +46,9 @@ function markdownTableToIndiceLines(tableLines) {
       titleParts = cols.slice(0, -1)
     }
 
-    const title = titleParts.join(' ').trim()
+    // Clean each column part to remove asterisks and bullet markdown formatting
+    const titlePartsCleaned = titleParts.map(c => cleanIndiceTitle(c))
+    const title = titlePartsCleaned.join(' ').trim()
     if (!title) continue
     out.push(page ? `${title} ${page}` : title)
   }
@@ -82,13 +84,14 @@ export function normalizeIndiceContent(raw) {
     if (line.startsWith('|')) {
       const cols = parseTableRow(line)
       if (cols) {
-        const joined = cols.join(' ').trim()
+        const joined = cols.map(c => cleanIndiceTitle(c)).join(' ').trim()
         if (joined) plain.push(joined)
       }
       continue
     }
 
-    plain.push(line)
+    const cleanedLine = cleanIndiceTitle(line)
+    if (cleanedLine) plain.push(cleanedLine)
   }
 
   return plain.join('\n')
